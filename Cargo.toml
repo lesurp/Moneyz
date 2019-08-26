@@ -1,0 +1,22 @@
+[package]
+name = "moneyzz"
+version = "0.1.0"
+authors = ["Paul Lesur <paul.lesur59@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# gui
+gtk = "^0.7.0"
+relm = "^0.17.0"
+relm-derive = "^0.17.0"
+gtk-test = "0.4.0"
+# qol
+num-traits = "0.2"
+num-derive = "0.2.5"
+# needed to get a nice "now" fn
+chrono = "0.4"
+# obv
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
