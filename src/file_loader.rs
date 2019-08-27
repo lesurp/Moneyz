@@ -2,7 +2,7 @@ use crate::data::{BudgetCategories, Month, MonthlyBudget, Year};
 use serde_json;
 use std::error::Error;
 use std::fs::File;
-use std::io::BufWriter;
+use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 
 const BUDGET_CATEGORIES_FILE: &'static str = "budget_categories.json";
@@ -28,9 +28,8 @@ impl FileLoader {
     }
 
     pub fn load_monthly_budget(&self, m: Month, y: Year) -> Result<MonthlyBudget, Box<dyn Error>> {
-        let monthly_budget_file = y.to_string() + "_" + &m.to_string();
         let mut monthly_budget_path = self.budget_categories_path.clone();
-        monthly_budget_path.push(monthly_budget_file);
+        monthly_budget_path.push(FileLoader::month_year_to_filename(m, y));
 
         FileLoader::load_or_default(monthly_budget_path)
     }
@@ -40,8 +39,8 @@ impl FileLoader {
     ) -> Result<T, Box<dyn Error>> {
         let path = path.into();
         if path.exists() {
-            let file = std::fs::File::open(path)?;
-            let reader = std::io::BufReader::new(file);
+            let file = File::open(path)?;
+            let reader = BufReader::new(file);
             Ok(serde_json::from_reader(reader)?)
         } else {
             Ok(Default::default())
@@ -50,7 +49,7 @@ impl FileLoader {
 
     pub fn save_budget_categories(
         &self,
-        budget_categories: BudgetCategories,
+        budget_categories: &BudgetCategories,
     ) -> Result<(), Box<dyn Error>> {
         FileLoader::save(&self.budget_categories_path, budget_categories)
     }
@@ -59,18 +58,21 @@ impl FileLoader {
         &self,
         m: Month,
         y: Year,
-        monthly_budget: MonthlyBudget,
+        monthly_budget: &MonthlyBudget,
     ) -> Result<(), Box<dyn Error>> {
-        let monthly_budget_file = y.to_string() + "_" + &m.to_string();
-        let mut monthly_budget_path = self.budget_categories_path.clone();
-        monthly_budget_path.push(monthly_budget_file);
+        let mut monthly_budget_path = self.base_dir.clone();
+        monthly_budget_path.push(FileLoader::month_year_to_filename(m, y));
 
         FileLoader::save(monthly_budget_path, monthly_budget)
     }
 
     fn save<T: serde::Serialize, P: AsRef<Path>>(path: P, t: T) -> Result<(), Box<dyn Error>> {
-        let file = std::fs::File::create(path)?;
-        let writer = std::io::BufWriter::new(file);
+        let file = File::create(path)?;
+        let writer = BufWriter::new(file);
         Ok(serde_json::to_writer(writer, &t)?)
+    }
+
+    fn month_year_to_filename(m: Month, y: Year) -> String {
+        y.to_string() + "_" + &m.to_string()
     }
 }

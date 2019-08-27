@@ -2,7 +2,7 @@ use num_derive::FromPrimitive;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-#[derive(FromPrimitive)]
+#[derive(FromPrimitive, Copy, Clone)]
 pub enum Month {
     Jan = 0,
     Feb,
@@ -38,8 +38,8 @@ impl ToString for Month {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Hash, Eq, PartialEq)]
-pub struct Year(i32);
+#[derive(Serialize, Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone)]
+pub struct Year(pub i32);
 
 impl ToString for Year {
     fn to_string(&self) -> String {
@@ -48,10 +48,10 @@ impl ToString for Year {
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Eq, PartialEq)]
-pub struct BudgetCategory(String);
+pub struct BudgetCategory(pub String);
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct BudgetCategories(HashSet<BudgetCategory>);
+pub struct BudgetCategories(pub HashSet<BudgetCategory>);
 
 impl Default for BudgetCategories {
     fn default() -> Self {

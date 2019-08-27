@@ -1,29 +1,74 @@
-use self::Msg::*;
+mod data;
+mod data_to_model;
+mod file_loader;
+
 use chrono::Datelike;
+use data::Month;
+use file_loader::FileLoader;
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::*;
-//use gtk::{ComboBoxTextExt, ComboBoxExt, GtkListStoreExtManual, Inhibit, OrientableExt, StaticType, WidgetExt};
-use data::Month;
 use relm::{connect, connect_stream, Widget};
 use relm_derive::{widget, Msg};
 
-mod data;
-mod file_loader;
+const DATA_DIR: &'static str = "data";
+
+pub struct MoneyzModel {
+    file_loader: FileLoader,
+
+    selected_month: data::Month,
+    selected_year: data::Year,
+
+    budget_categories: data::BudgetCategories,
+    monthly_budget: data::MonthlyBudget,
+}
 
 #[derive(Msg)]
-pub enum Msg {
+pub enum MoneyzMsg {
+    Save,
     Quit,
 }
 
 #[widget]
 impl Widget for Win {
-    fn model() -> () {
-        ()
+    fn model(_: &relm::Relm<Self>, file_loader: FileLoader) -> MoneyzModel {
+        let local: chrono::DateTime<chrono::Local> = chrono::Local::now();
+        let current_month = local.date().month() - 1; // chrono starts counting at 1
+        let current_year = local.date().year();
+        let selected_month: data::Month =
+            num_traits::FromPrimitive::from_u32(current_month).unwrap();
+        let selected_year = data::Year(current_year);
+
+        let budget_categories = file_loader.load_budget_categories().unwrap();
+        let monthly_budget = file_loader
+            .load_monthly_budget(selected_month, selected_year)
+            .unwrap();
+
+        MoneyzModel {
+            file_loader,
+            selected_month,
+            selected_year,
+            budget_categories,
+            monthly_budget,
+        }
     }
 
-    fn update(&mut self, event: Msg) {
+    fn update(&mut self, event: MoneyzMsg) {
         match event {
-            Quit => gtk::main_quit(),
+            MoneyzMsg::Quit => gtk::main_quit(),
+            MoneyzMsg::Save => {
+                self.model
+                    .file_loader
+                    .save_budget_categories(&self.model.budget_categories)
+                    .unwrap();
+                self.model
+                    .file_loader
+                    .save_monthly_budget(
+                        self.model.selected_month,
+                        self.model.selected_year,
+                        &self.model.monthly_budget,
+                    )
+                    .unwrap();
+            }
         }
     }
 
@@ -52,10 +97,6 @@ impl Widget for Win {
                 },
                 gtk::Box {
                     orientation: Horizontal,
-                    // cant see the tree_view on linux (i3wm) with this...
-                    //#[name="entries_scrolled_window"]
-                    //gtk::ScrolledWindow {
-                    //},
                     #[name="entries_tree_view"]
                     gtk::TreeView {},
                     gtk::Separator { orientation: Vertical },
@@ -63,18 +104,19 @@ impl Widget for Win {
                     gtk::TreeView {},
                 },
             },
-            delete_event(_, _) => (Quit, Inhibit(false)),
+            delete_event(_, _) => (MoneyzMsg::Quit, Inhibit(false)),
         }
     }
 
     fn init_view(&mut self) {
         let month_combo_box = &self.month_combo_box;
         let year_combo_box = &self.year_combo_box;
-        initialize_month_year_combo_boxes(&month_combo_box, &year_combo_box);
-
-        // this is broken on i3wm..?
-        //let entries_scrolled_window = &self.entries_scrolled_window;
-        //entries_scrolled_window.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
+        initialize_month_year_combo_boxes(
+            &self.model.selected_month,
+            &self.model.selected_year,
+            &month_combo_box,
+            &year_combo_box,
+        );
 
         initialize_entries_tree_view(&self.entries_tree_view);
         let model = gtk::ListStore::new(&[
@@ -87,25 +129,29 @@ impl Widget for Win {
         self.entries_tree_view.set_model(Some(&model));
 
         initialize_categories_tree_view(&self.categories_tree_view);
-        let model = gtk::ListStore::new(&[String::static_type(), String::static_type()]);
-        model.insert_with_values(Some(0), &[0, 1], &[&"asd", &"a"]);
-        model.insert_with_values(Some(0), &[0, 1], &[&"qwe", &"e"]);
+        let model: gtk::ListStore = self
+            .model
+            .file_loader
+            .load_budget_categories()
+            .unwrap()
+            .into();
         self.categories_tree_view.set_model(Some(&model));
     }
 }
 
-fn initialize_month_year_combo_boxes(mcb: &gtk::ComboBox, ycb: &gtk::ComboBox) {
-    let local: chrono::DateTime<chrono::Local> = chrono::Local::now();
-    let current_month = local.date().month() - 1; // chrono starts counting at 1
-    let current_year = local.date().year();
-
+fn initialize_month_year_combo_boxes(
+    month: &data::Month,
+    year: &data::Year,
+    mcb: &gtk::ComboBox,
+    ycb: &gtk::ComboBox,
+) {
     let cell = gtk::CellRendererText::new();
     let month_model = create_and_fill_month_model();
     mcb.set_model(Some(&month_model));
     mcb.pack_start(&cell, true);
     mcb.add_attribute(&cell, "text", 1);
     mcb.set_id_column(0);
-    mcb.set_active_id(Some(&current_month.to_string()));
+    mcb.set_active_id(Some(&month.to_string()));
 
     let cell = gtk::CellRendererText::new();
     let year_model = create_and_fill_year_model();
@@ -113,7 +159,7 @@ fn initialize_month_year_combo_boxes(mcb: &gtk::ComboBox, ycb: &gtk::ComboBox) {
     ycb.pack_start(&cell, true);
     ycb.add_attribute(&cell, "text", 1);
     ycb.set_id_column(0);
-    ycb.set_active_id(Some(&current_year.to_string()));
+    ycb.set_active_id(Some(&year.to_string()));
 }
 
 fn create_and_fill_month_model() -> gtk::ListStore {
@@ -205,24 +251,6 @@ fn initialize_categories_tree_view(categories_tree_view: &gtk::TreeView) {
 }
 
 fn main() {
-    Win::run(()).expect("Win::run failed");
+    let file_loader = FileLoader::new(DATA_DIR);
+    Win::run(file_loader).expect("Win::run failed");
 }
-
-/*
-#[cfg(test)]
-mod tests {
-    use gtk::{Cast, Label, LabelExt, NotebookExt};
-    use gtk_test::assert_text;
-
-    use relm;
-
-    use super::Win;
-
-    #[test]
-    fn root_widget() {
-        let (_component, widgets) = relm::init_test::<Win>(()).expect("init_test failed");
-        let month_combo_box = &widgets.month_combo_box;
-        let year_combo_box = &widgets.year_combo_box;
-    }
-}
-*/
