@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 
-const BUDGET_CATEGORIES_FILE: &'static str = "budget_categories.json";
+const BUDGET_CATEGORIES_FILE: &str = "budget_categories.json";
 
 pub struct FileLoader {
     base_dir: PathBuf,
@@ -73,6 +73,6 @@ impl FileLoader {
     }
 
     fn month_year_to_filename(m: Month, y: Year) -> String {
-        y.to_string() + "_" + &m.to_string()
+        y.to_string() + "_" + &m.id_string()
     }
 }
