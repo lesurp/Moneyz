@@ -10,7 +10,7 @@ use gtk::*;
 use relm::{connect, connect_stream, Widget};
 use relm_derive::{widget, Msg};
 
-const DATA_DIR: &'static str = "data";
+const DATA_DIR: &str = "data";
 
 pub struct MoneyzModel {
     file_loader: FileLoader,
@@ -50,6 +50,68 @@ impl Widget for Win {
             budget_categories,
             monthly_budget,
         }
+    }
+
+    fn initialize_budget_categories_headers(&self) {
+        let col = gtk::TreeViewColumn::new();
+        col.set_title("Budget category name");
+        let cell = gtk::CellRendererText::new();
+        cell.set_property_editable(true);
+        col.pack_start(&cell, true);
+        col.add_attribute(&cell, "text", 0);
+        self.budget_categories_tree_view.append_column(&col);
+
+        let col = gtk::TreeViewColumn::new();
+        col.set_title("Budget amount");
+        let cell = gtk::CellRendererText::new();
+        cell.set_property_editable(true);
+        col.pack_start(&cell, true);
+        col.add_attribute(&cell, "text", 0);
+        self.budget_categories_tree_view.append_column(&col);
+    }
+
+    fn initialize_spendings_tree_view_headers(&self) {
+        let col = gtk::TreeViewColumn::new();
+        col.set_title("Name");
+        let cell = gtk::CellRendererText::new();
+        cell.set_property_editable(true);
+        col.pack_start(&cell, true);
+        col.add_attribute(&cell, "text", 0);
+        self.spendings_tree_view.append_column(&col);
+
+        let col = gtk::TreeViewColumn::new();
+        col.set_title("Category");
+        let cell = gtk::CellRendererCombo::new();
+        let category_model: gtk::ListStore = self
+            .model
+            .file_loader
+            .load_budget_categories()
+            .unwrap()
+            .into();
+        let tree_model = category_model.upcast::<gtk::TreeModel>();
+        cell.set_property_model(Some(&tree_model));
+        cell.set_property_editable(true);
+        cell.set_property_has_entry(false);
+        cell.set_property_text_column(0);
+        col.pack_start(&cell, true);
+        col.add_attribute(&cell, "text", 1);
+        self.spendings_tree_view.append_column(&col);
+
+        let col = gtk::TreeViewColumn::new();
+        col.set_title("Amount");
+        let cell = gtk::CellRendererText::new();
+        cell.set_property_editable(true);
+        col.pack_start(&cell, true);
+        col.add_attribute(&cell, "text", 2);
+        self.spendings_tree_view.append_column(&col);
+
+        let col = gtk::TreeViewColumn::new();
+        col.set_title("Day");
+        let cell = gtk::CellRendererText::new();
+        cell.set_property_editable(true);
+        col.pack_start(&cell, true);
+        col.add_attribute(&cell, "text", 3);
+        self.spendings_tree_view.append_column(&col);
     }
 
     fn update(&mut self, event: MoneyzMsg) {
@@ -97,10 +159,10 @@ impl Widget for Win {
                 },
                 gtk::Box {
                     orientation: Horizontal,
-                    #[name="entries_tree_view"]
+                    #[name="spendings_tree_view"]
                     gtk::TreeView {},
                     gtk::Separator { orientation: Vertical },
-                    #[name="categories_tree_view"]
+                    #[name="budget_categories_tree_view"]
                     gtk::TreeView {},
                 },
             },
@@ -112,36 +174,35 @@ impl Widget for Win {
         let month_combo_box = &self.month_combo_box;
         let year_combo_box = &self.year_combo_box;
         initialize_month_year_combo_boxes(
-            &self.model.selected_month,
-            &self.model.selected_year,
+            self.model.selected_month,
+            self.model.selected_year,
             &month_combo_box,
             &year_combo_box,
         );
 
-        initialize_entries_tree_view(&self.entries_tree_view);
-        let model = gtk::ListStore::new(&[
-            String::static_type(),
-            String::static_type(),
-            String::static_type(),
-        ]);
-        model.insert_with_values(Some(0), &[0, 1, 2], &[&"asd", &"a", &"asdasda"]);
-        model.insert_with_values(Some(0), &[0, 1, 2], &[&"qwe", &"e", &"rgon"]);
-        self.entries_tree_view.set_model(Some(&model));
+        self.initialize_spendings_tree_view_headers();
+        let (_, spendings_model): (gtk::ListStore, gtk::ListStore) = self
+            .model
+            .file_loader
+            .load_monthly_budget(self.model.selected_month, self.model.selected_year)
+            .unwrap()
+            .into();
+        self.spendings_tree_view.set_model(Some(&spendings_model));
 
-        initialize_categories_tree_view(&self.categories_tree_view);
+        self.initialize_budget_categories_headers();
         let model: gtk::ListStore = self
             .model
             .file_loader
             .load_budget_categories()
             .unwrap()
             .into();
-        self.categories_tree_view.set_model(Some(&model));
+        self.budget_categories_tree_view.set_model(Some(&model));
     }
 }
 
 fn initialize_month_year_combo_boxes(
-    month: &data::Month,
-    year: &data::Year,
+    month: data::Month,
+    year: data::Year,
     mcb: &gtk::ComboBox,
     ycb: &gtk::ComboBox,
 ) {
@@ -151,103 +212,32 @@ fn initialize_month_year_combo_boxes(
     mcb.pack_start(&cell, true);
     mcb.add_attribute(&cell, "text", 1);
     mcb.set_id_column(0);
-    mcb.set_active_id(Some(&month.to_string()));
+    mcb.set_active_id(Some(&month.id_string()));
 
     let cell = gtk::CellRendererText::new();
     let year_model = create_and_fill_year_model();
     ycb.set_model(Some(&year_model));
     ycb.pack_start(&cell, true);
-    ycb.add_attribute(&cell, "text", 1);
+    ycb.add_attribute(&cell, "text", 0);
     ycb.set_id_column(0);
     ycb.set_active_id(Some(&year.to_string()));
 }
 
 fn create_and_fill_month_model() -> gtk::ListStore {
-    // Single row model
     let model = gtk::ListStore::new(&[String::static_type(), String::static_type()]);
-
     for m_idx in 0 as u32..12 {
         let m: Month = num_traits::FromPrimitive::from_u32(m_idx).unwrap();
-        let m_str = m.to_string();
-        model.insert_with_values(
-            Some(m_idx),
-            &[0, 1],
-            &[&m_idx.to_string(), &m_str.to_string()],
-        );
+        model.insert_with_values(Some(m_idx), &[0, 1], &[&m.id_string(), &m.display_string()]);
     }
-
     model
 }
 
 fn create_and_fill_year_model() -> gtk::ListStore {
-    // Single row model
-    let model = gtk::ListStore::new(&[String::static_type(), String::static_type()]);
-
+    let model = gtk::ListStore::new(&[String::static_type()]);
     for year in 2010 as u32..2099 {
-        model.insert_with_values(Some(year), &[0, 1], &[&year.to_string(), &year.to_string()]);
+        model.insert_with_values(None, &[0], &[&year.to_string()]);
     }
-
     model
-}
-
-fn create_and_fill_budget_category_model() -> gtk::ListStore {
-    let model = gtk::ListStore::new(&[String::static_type(), String::static_type()]);
-    model.insert_with_values(Some(0), &[0, 1], &[&0.to_string(), &"a".to_string()]);
-    model.insert_with_values(Some(1), &[0, 1], &[&1.to_string(), &"z".to_string()]);
-    model.insert_with_values(Some(2), &[0, 1], &[&2.to_string(), &"e".to_string()]);
-    model.insert_with_values(Some(3), &[0, 1], &[&3.to_string(), &"r".to_string()]);
-    model.insert_with_values(Some(4), &[0, 1], &[&4.to_string(), &"t".to_string()]);
-    model.insert_with_values(Some(5), &[0, 1], &[&5.to_string(), &"y".to_string()]);
-    model
-}
-
-fn initialize_entries_tree_view(entries_tree_view: &gtk::TreeView) {
-    let col = gtk::TreeViewColumn::new();
-    col.set_title("Name");
-    let cell = gtk::CellRendererText::new();
-    cell.set_property_editable(true);
-    col.pack_start(&cell, true);
-    col.add_attribute(&cell, "text", 0);
-    entries_tree_view.append_column(&col);
-
-    let col = gtk::TreeViewColumn::new();
-    col.set_title("Category");
-    let cell = gtk::CellRendererCombo::new();
-    let list_store = create_and_fill_budget_category_model();
-    let tree_model = list_store.upcast::<gtk::TreeModel>();
-    cell.set_property_model(Some(&tree_model));
-    cell.set_property_editable(true);
-    cell.set_property_has_entry(false);
-    cell.set_property_text_column(1);
-    col.pack_start(&cell, true);
-    col.add_attribute(&cell, "text", 1);
-    entries_tree_view.append_column(&col);
-
-    let col = gtk::TreeViewColumn::new();
-    col.set_title("Amount");
-    let cell = gtk::CellRendererText::new();
-    cell.set_property_editable(true);
-    col.pack_start(&cell, true);
-    col.add_attribute(&cell, "text", 2);
-    entries_tree_view.append_column(&col);
-}
-
-fn initialize_categories_tree_view(categories_tree_view: &gtk::TreeView) {
-    let col = gtk::TreeViewColumn::new();
-    col.set_title("Budget category name");
-    let cell = gtk::CellRendererText::new();
-    cell.set_property_editable(true);
-    col.pack_start(&cell, true);
-    col.add_attribute(&cell, "text", 0);
-    categories_tree_view.append_column(&col);
-
-    let col = gtk::TreeViewColumn::new();
-    col.set_title("Budget amount");
-    let cell = gtk::CellRendererText::new();
-    cell.set_property_editable(true);
-    col.pack_start(&cell, true);
-    col.add_attribute(&cell, "text", 0);
-    categories_tree_view.append_column(&col);
 }
 
 fn main() {
