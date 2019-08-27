@@ -43,32 +43,58 @@ impl Widget for Win {
                     #[name="config_button"]
                     gtk::Button {
                         label: "Configuration"
+                    },
+                    #[name="save_button"]
+                    gtk::Button {
+                        label: "Save"
                     }
+
                 },
                 gtk::Box {
                     orientation: Horizontal,
-                    #[name="entries_scrolled_window"]
-                    gtk::ScrolledWindow {
-                        #[name="entries_tree_view"]
-                        gtk::TreeView {
-
-                        },
-                    },
-                    #[name="categories_scrolled_window"]
-                    gtk::ScrolledWindow {
-                        #[name="categories_tree_view"]
-                        gtk::TreeView {
-
-                        },
-                    },
+                    // cant see the tree_view on linux (i3wm) with this...
+                    //#[name="entries_scrolled_window"]
+                    //gtk::ScrolledWindow {
+                    //},
+                    #[name="entries_tree_view"]
+                    gtk::TreeView {},
+                    gtk::Separator { orientation: Vertical },
+                    #[name="categories_tree_view"]
+                    gtk::TreeView {},
                 },
             },
             delete_event(_, _) => (Quit, Inhibit(false)),
         }
     }
+
+    fn init_view(&mut self) {
+        let month_combo_box = &self.month_combo_box;
+        let year_combo_box = &self.year_combo_box;
+        initialize_month_year_combo_boxes(&month_combo_box, &year_combo_box);
+
+        // this is broken on i3wm..?
+        //let entries_scrolled_window = &self.entries_scrolled_window;
+        //entries_scrolled_window.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
+
+        initialize_entries_tree_view(&self.entries_tree_view);
+        let model = gtk::ListStore::new(&[
+            String::static_type(),
+            String::static_type(),
+            String::static_type(),
+        ]);
+        model.insert_with_values(Some(0), &[0, 1, 2], &[&"asd", &"a", &"asdasda"]);
+        model.insert_with_values(Some(0), &[0, 1, 2], &[&"qwe", &"e", &"rgon"]);
+        self.entries_tree_view.set_model(Some(&model));
+
+        initialize_categories_tree_view(&self.categories_tree_view);
+        let model = gtk::ListStore::new(&[String::static_type(), String::static_type()]);
+        model.insert_with_values(Some(0), &[0, 1], &[&"asd", &"a"]);
+        model.insert_with_values(Some(0), &[0, 1], &[&"qwe", &"e"]);
+        self.categories_tree_view.set_model(Some(&model));
+    }
 }
 
-fn initialize_month_year_combo_boxex(mcb: &gtk::ComboBox, ycb: &gtk::ComboBox) {
+fn initialize_month_year_combo_boxes(mcb: &gtk::ComboBox, ycb: &gtk::ComboBox) {
     let local: chrono::DateTime<chrono::Local> = chrono::Local::now();
     let current_month = local.date().month() - 1; // chrono starts counting at 1
     let current_year = local.date().year();
@@ -129,16 +155,7 @@ fn create_and_fill_budget_category_model() -> gtk::ListStore {
     model
 }
 
-fn main() {
-    let (_component, widgets) = relm::init_test::<Win>(()).expect("test failed");
-    let month_combo_box = &widgets.month_combo_box;
-    let year_combo_box = &widgets.year_combo_box;
-    initialize_month_year_combo_boxex(&month_combo_box, &year_combo_box);
-
-    let entries_tree_view = &widgets.entries_tree_view;
-    let entries_scrolled_window = &widgets.entries_scrolled_window;
-    entries_scrolled_window.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
-
+fn initialize_entries_tree_view(entries_tree_view: &gtk::TreeView) {
     let col = gtk::TreeViewColumn::new();
     col.set_title("Name");
     let cell = gtk::CellRendererText::new();
@@ -167,22 +184,28 @@ fn main() {
     col.pack_start(&cell, true);
     col.add_attribute(&cell, "text", 2);
     entries_tree_view.append_column(&col);
+}
+
+fn initialize_categories_tree_view(categories_tree_view: &gtk::TreeView) {
+    let col = gtk::TreeViewColumn::new();
+    col.set_title("Budget category name");
+    let cell = gtk::CellRendererText::new();
+    cell.set_property_editable(true);
+    col.pack_start(&cell, true);
+    col.add_attribute(&cell, "text", 0);
+    categories_tree_view.append_column(&col);
 
     let col = gtk::TreeViewColumn::new();
-    col.set_title("Budget surplus");
+    col.set_title("Budget amount");
     let cell = gtk::CellRendererText::new();
-    cell.set_property_editable(false);
+    cell.set_property_editable(true);
     col.pack_start(&cell, true);
+    col.add_attribute(&cell, "text", 0);
+    categories_tree_view.append_column(&col);
+}
 
-    let model = gtk::ListStore::new(&[
-        String::static_type(),
-        String::static_type(),
-        String::static_type(),
-    ]);
-    model.insert_with_values(Some(0), &[0, 1, 2], &[&"asd", &"a", &"asdasda"]);
-    model.insert_with_values(Some(0), &[0, 1, 2], &[&"qwe", &"e", &"rgon"]);
-    entries_tree_view.set_model(Some(&model));
-    gtk::main();
+fn main() {
+    Win::run(()).expect("Win::run failed");
 }
 
 /*
