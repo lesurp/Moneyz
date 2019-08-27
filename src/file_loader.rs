@@ -7,14 +7,15 @@ use std::path::{Path, PathBuf};
 
 const BUDGET_CATEGORIES_FILE: &'static str = "budget_categories.json";
 
-struct FileLoader {
+pub struct FileLoader {
     base_dir: PathBuf,
     budget_categories_path: PathBuf,
 }
 
 impl FileLoader {
-    pub fn new(base_dir: std::path::PathBuf) -> Self {
-        let mut budget_categories_path = PathBuf::from(base_dir.clone());
+    pub fn new<P: Into<PathBuf>>(base_dir: P) -> Self {
+        let base_dir = base_dir.into();
+        let mut budget_categories_path = base_dir.clone();
         budget_categories_path.push(BUDGET_CATEGORIES_FILE);
         FileLoader {
             base_dir,
