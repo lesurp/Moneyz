@@ -15,6 +15,9 @@ pub struct FileLoader {
 impl FileLoader {
     pub fn new<P: Into<PathBuf>>(base_dir: P) -> Self {
         let base_dir = base_dir.into();
+        if !base_dir.is_dir() {
+            std::fs::create_dir_all(&base_dir).unwrap()
+        }
         let mut budget_categories_path = base_dir.clone();
         budget_categories_path.push(BUDGET_CATEGORIES_FILE);
         FileLoader {
