@@ -43,7 +43,7 @@ impl Month {
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone)]
-pub struct Year(pub i32);
+pub struct Year(pub u32);
 
 impl ToString for Year {
     fn to_string(&self) -> String {

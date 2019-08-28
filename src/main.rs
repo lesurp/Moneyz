@@ -7,10 +7,13 @@ use data::Month;
 use file_loader::FileLoader;
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::*;
+use log::debug;
 use relm::{connect, connect_stream, Widget};
 use relm_derive::{widget, Msg};
 
-const DATA_DIR: &str = "data";
+const DATA_DIR: &str = "./data";
+const FIRST_YEAR: u32 = 2000;
+const LAST_YEAR: u32 = 2100;
 
 pub struct MoneyzModel {
     file_loader: FileLoader,
@@ -24,6 +27,8 @@ pub struct MoneyzModel {
 
 #[derive(Msg)]
 pub enum MoneyzMsg {
+    ChangeSelectedDate,
+    SpendingCellChanged,
     Save,
     Quit,
 }
@@ -36,12 +41,12 @@ impl Widget for Win {
         let current_year = local.date().year();
         let selected_month: data::Month =
             num_traits::FromPrimitive::from_u32(current_month).unwrap();
-        let selected_year = data::Year(current_year);
+        let selected_year = data::Year(current_year as u32);
 
-        let budget_categories = file_loader.load_budget_categories().unwrap();
-        let monthly_budget = file_loader
-            .load_monthly_budget(selected_month, selected_year)
-            .unwrap();
+        // no need to initialize the model there, because when we set the initial date (to
+        // today's), the callback already takes care of loading the model
+        let budget_categories = Default::default();
+        let monthly_budget = Default::default();
 
         MoneyzModel {
             file_loader,
@@ -104,6 +109,10 @@ impl Widget for Win {
         col.pack_start(&cell, true);
         col.add_attribute(&cell, "text", 2);
         self.spendings_tree_view.append_column(&col);
+        //connect!(self, col, connect_editing_started(_), MoneyzMsg::SpendingCellChanged);
+        //cell.connect_editing_started(|_,_,_| {
+            //self.emit(MoneyzMsg::SpendingCellChanged)
+        //});
 
         let col = gtk::TreeViewColumn::new();
         col.set_title("Day");
@@ -115,9 +124,42 @@ impl Widget for Win {
     }
 
     fn update(&mut self, event: MoneyzMsg) {
+        debug!("update");
         match event {
+            MoneyzMsg::SpendingCellChanged => {
+                debug!("MoneyzMsg::SpendingCellChanged");
+            }
+            MoneyzMsg::ChangeSelectedDate => {
+                debug!("MoneyzMsg::ChangeSelectedDate");
+                let selected_month_id = if let Some(id) = self.month_combo_box.get_active() {
+                    id
+                } else {
+                    return;
+                };
+                self.model.selected_month =
+                    num_traits::FromPrimitive::from_u32(selected_month_id).unwrap();
+                debug!(
+                    "month_combo_box: id is {}, which corresponds to the month {}",
+                    selected_month_id,
+                    self.model.selected_month.display_string()
+                );
+
+                self.model.selected_year = if let Some(id) = self.year_combo_box.get_active() {
+                    data::Year(id)
+                } else {
+                    return;
+                };
+                debug!("year_combo_box: year is {}", self.model.selected_year.0);
+
+                self.model.monthly_budget = self
+                    .model
+                    .file_loader
+                    .load_monthly_budget(self.model.selected_month, self.model.selected_year)
+                    .unwrap();
+            }
             MoneyzMsg::Quit => gtk::main_quit(),
             MoneyzMsg::Save => {
+                debug!("MoneyzMsg::Save");
                 self.model
                     .file_loader
                     .save_budget_categories(&self.model.budget_categories)
@@ -143,17 +185,20 @@ impl Widget for Win {
                     orientation: Horizontal,
                     #[name="month_combo_box"]
                     gtk::ComboBox {
+                        changed(_) => MoneyzMsg::ChangeSelectedDate,
                     },
                     #[name="year_combo_box"]
                     gtk::ComboBox {
-                },
+                        changed(_) => MoneyzMsg::ChangeSelectedDate,
+                    },
                     #[name="config_button"]
                     gtk::Button {
                         label: "Configuration"
                     },
                     #[name="save_button"]
                     gtk::Button {
-                        label: "Save"
+                        label: "Save",
+                            clicked(_) => MoneyzMsg::Save,
                     }
 
                 },
@@ -210,37 +255,37 @@ fn initialize_month_year_combo_boxes(
     let month_model = create_and_fill_month_model();
     mcb.set_model(Some(&month_model));
     mcb.pack_start(&cell, true);
-    mcb.add_attribute(&cell, "text", 1);
-    mcb.set_id_column(0);
-    mcb.set_active_id(Some(&month.id_string()));
+    mcb.add_attribute(&cell, "text", 0);
+    mcb.set_active(Some(month as u32));
 
     let cell = gtk::CellRendererText::new();
     let year_model = create_and_fill_year_model();
     ycb.set_model(Some(&year_model));
     ycb.pack_start(&cell, true);
     ycb.add_attribute(&cell, "text", 0);
-    ycb.set_id_column(0);
-    ycb.set_active_id(Some(&year.to_string()));
+    ycb.set_active(Some(year.0 - FIRST_YEAR));
 }
 
 fn create_and_fill_month_model() -> gtk::ListStore {
-    let model = gtk::ListStore::new(&[String::static_type(), String::static_type()]);
+    let model = gtk::ListStore::new(&[String::static_type()]);
     for m_idx in 0 as u32..12 {
         let m: Month = num_traits::FromPrimitive::from_u32(m_idx).unwrap();
-        model.insert_with_values(Some(m_idx), &[0, 1], &[&m.id_string(), &m.display_string()]);
+        model.insert_with_values(None, &[0], &[&m.display_string()]);
     }
     model
 }
 
 fn create_and_fill_year_model() -> gtk::ListStore {
     let model = gtk::ListStore::new(&[String::static_type()]);
-    for year in 2010 as u32..2099 {
+    for year in FIRST_YEAR..LAST_YEAR {
         model.insert_with_values(None, &[0], &[&year.to_string()]);
     }
     model
 }
 
 fn main() {
+    env_logger::init();
+
     let file_loader = FileLoader::new(DATA_DIR);
     Win::run(file_loader).expect("Win::run failed");
 }
