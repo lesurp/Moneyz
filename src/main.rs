@@ -17,6 +17,7 @@ const LAST_YEAR: u32 = 2100;
 
 pub struct MoneyzModel {
     file_loader: FileLoader,
+    relm: relm::Relm<Win>,
 
     selected_month: data::Month,
     selected_year: data::Year,
@@ -29,13 +30,15 @@ pub struct MoneyzModel {
 pub enum MoneyzMsg {
     ChangeSelectedDate,
     SpendingCellChanged,
+    CategoryNameChanged,
+    BudgetAmountChanged,
     Save,
     Quit,
 }
 
 #[widget]
 impl Widget for Win {
-    fn model(_: &relm::Relm<Self>, file_loader: FileLoader) -> MoneyzModel {
+    fn model(relm: &relm::Relm<Self>, file_loader: FileLoader) -> MoneyzModel {
         let local: chrono::DateTime<chrono::Local> = chrono::Local::now();
         let current_month = local.date().month() - 1; // chrono starts counting at 1
         let current_year = local.date().year();
@@ -50,6 +53,7 @@ impl Widget for Win {
 
         MoneyzModel {
             file_loader,
+            relm: relm.clone(),
             selected_month,
             selected_year,
             budget_categories,
@@ -63,16 +67,64 @@ impl Widget for Win {
         let cell = gtk::CellRendererText::new();
         cell.set_property_editable(true);
         col.pack_start(&cell, true);
-        col.add_attribute(&cell, "text", 0);
+        col.add_attribute(&cell, "text", 1);
         self.budget_categories_tree_view.append_column(&col);
+
+        let budget_categories_tree_view_ref = self.budget_categories_tree_view.clone();
+        let relm = self.model.relm.clone();
+        cell.connect_edited(move |_, path, value| {
+            debug!("Category name has been changed: {}", value);
+            let tree_model = budget_categories_tree_view_ref.get_model().unwrap();
+            let model = tree_model.downcast::<gtk::ListStore>().unwrap();
+            let mut does_name_already_exist = false;
+            model.foreach(|m, _, i| {
+                let val = m.get_value(i, 1);
+                does_name_already_exist = val.get() == Some(value);
+                does_name_already_exist
+            });
+            if !does_name_already_exist {
+                let iter = model.get_iter(&path).unwrap();
+                model.set_value(&iter, 1, &Value::from(&value));
+                // if the row was the default one, change it to non-default then add another default one
+                if model.get_value(&iter, 3).get().unwrap() {
+                    model.set_value(&iter, 3, &Value::from(&false));
+                    let latest_id = model.get_value(&iter, 0).get::<u32>().unwrap();
+                    model.insert_with_values(
+                        None,
+                        &[0, 1, 2, 3],
+                        &[&(latest_id + 1), &"New category", &0, &true],
+                    );
+                }
+                relm.stream().emit(MoneyzMsg::CategoryNameChanged);
+            } else {
+                debug!("Selected category name already exists!");
+            }
+        });
 
         let col = gtk::TreeViewColumn::new();
         col.set_title("Budget amount");
         let cell = gtk::CellRendererText::new();
         cell.set_property_editable(true);
         col.pack_start(&cell, true);
-        col.add_attribute(&cell, "text", 0);
+        col.add_attribute(&cell, "text", 2);
         self.budget_categories_tree_view.append_column(&col);
+
+        let budget_categories_tree_view_ref = self.budget_categories_tree_view.clone();
+        let relm = self.model.relm.clone();
+        cell.connect_edited(move |_, path, value| {
+            debug!("Budget amount modified; new value: {}", value);
+            match value.parse::<i32>() {
+                Err(_) => debug!("'{}' could NOT be parsed into an amount", value),
+                Ok(amount) => {
+                    let tree_model = budget_categories_tree_view_ref.get_model().unwrap();
+                    let model = tree_model.downcast::<gtk::ListStore>().unwrap();
+                    let iter = model.get_iter(&path).unwrap();
+                    model.set_value(&iter, 2, &Value::from(&amount));
+                    debug!("Parsed amount: {}", amount);
+                    relm.stream().emit(MoneyzMsg::BudgetAmountChanged);
+                }
+            }
+        });
     }
 
     fn initialize_spendings_tree_view_headers(&self) {
@@ -97,10 +149,10 @@ impl Widget for Win {
         cell.set_property_model(Some(&tree_model));
         cell.set_property_editable(true);
         cell.set_property_has_entry(false);
-        cell.set_property_text_column(0);
+        cell.set_property_text_column(1);
         col.pack_start(&cell, true);
-        col.add_attribute(&cell, "text", 1);
-        col.add_attribute(&cell, "background", 4);
+        col.add_attribute(&cell, "text", 2);
+        col.add_attribute(&cell, "background", 5);
         self.spendings_tree_view.append_column(&col);
 
         let col = gtk::TreeViewColumn::new();
@@ -108,27 +160,123 @@ impl Widget for Win {
         let cell = gtk::CellRendererText::new();
         cell.set_property_editable(true);
         col.pack_start(&cell, true);
-        col.add_attribute(&cell, "text", 2);
+        col.add_attribute(&cell, "text", 3);
         self.spendings_tree_view.append_column(&col);
-        //connect!(self, col, connect_editing_started(_), MoneyzMsg::SpendingCellChanged);
-        //cell.connect_editing_started(|_,_,_| {
-            //self.emit(MoneyzMsg::SpendingCellChanged)
-        //});
+        let spendings_tree_view_ref = self.spendings_tree_view.clone();
+        let relm = self.model.relm.clone();
+        cell.connect_edited(move |_, path, value| {
+            debug!("Amount cell modified; new value: {}", value);
+            match value.parse::<i32>() {
+                Err(_) => debug!("'{}' could NOT be parsed into an amount", value),
+                Ok(amount) => {
+                    let tree_model = spendings_tree_view_ref.get_model().unwrap();
+                    let model = tree_model.downcast::<gtk::ListStore>().unwrap();
+                    let iter = model.get_iter(&path).unwrap();
+                    model.set_value(&iter, 3, &Value::from(&amount));
+                    debug!("Parsed amount: {}", amount);
+                    relm.stream().emit(MoneyzMsg::SpendingCellChanged);
+                }
+            }
+        });
 
         let col = gtk::TreeViewColumn::new();
         col.set_title("Day");
         let cell = gtk::CellRendererText::new();
         cell.set_property_editable(true);
         col.pack_start(&cell, true);
-        col.add_attribute(&cell, "text", 3);
+        col.add_attribute(&cell, "text", 4);
         self.spendings_tree_view.append_column(&col);
+        //let spendings_tree_view_ref = self.spendings_tree_view.clone();
+        //let relm = self.model.relm.clone();
+        cell.connect_edited(move |_, _, value| {
+            debug!("Day cell modified; new value: {}", value);
+            //let value = value.parse::<i32>();
+            //if value.is_err() {
+            //debug!("'{}' could NOT be parsed into a day", value);
+            //return;
+            //}
+
+            // TODO: I need to access selected_month / year here, but I can't access the
+            // self.model!
+            //match data::Day::try_new(value, ) {
+            //Err(_) => debug!("'{}' could NOT be parsed into a day", value),
+            //Ok(amount) => {
+            //let tree_model = spendings_tree_view_ref.get_model().unwrap();
+            //let model = tree_model.downcast::<gtk::ListStore>().unwrap();
+            //let iter = model.get_iter(&path).unwrap();
+            //model.set_value(&iter, 3, &Value::from(&amount));
+            //debug!("Parsed amount: {}", amount);
+            //relm.stream().emit(MoneyzMsg::SpendingCellChanged);
+            //}
+            //}
+        });
     }
 
     fn update(&mut self, event: MoneyzMsg) {
         debug!("update");
         match event {
+            MoneyzMsg::BudgetAmountChanged => {
+                debug!("MoneyzMsg::BudgetAmountChanged");
+                self.model.monthly_budget = data_to_model::list_store_to_monthly_budget(
+                    self.spendings_tree_view.get_model().unwrap(),
+                    self.budget_categories_tree_view.get_model().unwrap(),
+                );
+                self.model
+                    .file_loader
+                    .save_monthly_budget(
+                        self.model.selected_month,
+                        self.model.selected_year,
+                        &self.model.monthly_budget,
+                    )
+                    .unwrap();
+            }
+            MoneyzMsg::CategoryNameChanged => {
+                debug!("MoneyzMsg::CategoryNameChanged");
+                // TODO: it's a bit shit not to use a generated int actually, if we rename a
+                // category...
+                self.model.budget_categories = data_to_model::list_store_to_budget_categories(
+                    self.budget_categories_tree_view.get_model().unwrap(),
+                );
+                self.model
+                    .file_loader
+                    .save_budget_categories(&self.model.budget_categories)
+                    .unwrap();
+
+                // because the name of a category has changed, we want to also update the displayed name in the spendings list
+                // to do that, we recreate the ListModel using the new budget categories and the old monthly_budget,
+                // then we create the new monthly_budget from the model. A bit awkward, needs some refactoring..?
+                self.spendings_tree_view
+                    .set_model(Some(&data_to_model::get_spendings_model(
+                        &self.model.monthly_budget,
+                        &self.model.budget_categories,
+                    )));
+                self.model.monthly_budget = data_to_model::list_store_to_monthly_budget(
+                    self.spendings_tree_view.get_model().unwrap(),
+                    self.budget_categories_tree_view.get_model().unwrap(),
+                );
+                self.model
+                    .file_loader
+                    .save_monthly_budget(
+                        self.model.selected_month,
+                        self.model.selected_year,
+                        &self.model.monthly_budget,
+                    )
+                    .unwrap();
+            }
             MoneyzMsg::SpendingCellChanged => {
                 debug!("MoneyzMsg::SpendingCellChanged");
+                self.model.monthly_budget = data_to_model::list_store_to_monthly_budget(
+                    self.spendings_tree_view.get_model().unwrap(),
+                    self.budget_categories_tree_view.get_model().unwrap(),
+                );
+                self.model
+                    .file_loader
+                    .save_monthly_budget(
+                        self.model.selected_month,
+                        self.model.selected_year,
+                        &self.model.monthly_budget,
+                    )
+                    .unwrap();
             }
             MoneyzMsg::ChangeSelectedDate => {
                 debug!("MoneyzMsg::ChangeSelectedDate");
@@ -146,7 +294,7 @@ impl Widget for Win {
                 );
 
                 self.model.selected_year = if let Some(id) = self.year_combo_box.get_active() {
-                    data::Year(id)
+                    data::Year(id + FIRST_YEAR)
                 } else {
                     return;
                 };
@@ -231,6 +379,7 @@ impl Widget for Win {
             .file_loader
             .load_monthly_budget(self.model.selected_month, self.model.selected_year)
             .unwrap();
+        println!("{:?}", monthly_budget);
         let budget_categories = self.model.file_loader.load_budget_categories().unwrap();
         self.initialize_budget_categories_headers();
         self.initialize_spendings_tree_view_headers();
