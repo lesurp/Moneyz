@@ -31,7 +31,7 @@ impl FileLoader {
     }
 
     pub fn load_monthly_budget(&self, m: Month, y: Year) -> Result<MonthlyBudget, Box<dyn Error>> {
-        let mut monthly_budget_path = self.budget_categories_path.clone();
+        let mut monthly_budget_path = self.base_dir.clone();
         monthly_budget_path.push(FileLoader::month_year_to_filename(m, y));
 
         FileLoader::load_or_default(monthly_budget_path)
@@ -76,6 +76,6 @@ impl FileLoader {
     }
 
     fn month_year_to_filename(m: Month, y: Year) -> String {
-        y.to_string() + "_" + &m.id_string()
+        y.to_string() + "_" + &format!("{:02}", m.id()) + ".json"
     }
 }
