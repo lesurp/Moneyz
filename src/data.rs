@@ -1,6 +1,7 @@
 use num_derive::FromPrimitive;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
+use std::hash::{Hash, Hasher};
 
 #[derive(FromPrimitive, Copy, Clone)]
 pub enum Month {
@@ -37,8 +38,8 @@ impl Month {
         .to_owned()
     }
 
-    pub fn id_string(self) -> String {
-        (self as i32).to_string()
+    pub fn id(self) -> i32 {
+        (self as i32) + 1
     }
 }
 
@@ -99,15 +100,75 @@ impl Day {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Hash, Eq, PartialEq)]
-pub struct BudgetCategory(pub String);
+#[derive(Serialize, Deserialize, Debug, Hash, Copy, Clone)]
+pub struct BudgetCategoryId(pub u32);
+
+impl Ord for BudgetCategoryId {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
+impl PartialEq for BudgetCategoryId {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl PartialOrd for BudgetCategoryId {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Eq for BudgetCategoryId {}
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct BudgetCategories(pub HashSet<BudgetCategory>);
+pub struct BudgetCategory(pub BudgetCategoryId, pub String);
+
+impl Ord for BudgetCategory {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
+impl PartialEq for BudgetCategory {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl PartialOrd for BudgetCategory {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Eq for BudgetCategory {}
+
+impl Hash for BudgetCategory {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl BudgetCategory {
+    pub fn id(&self) -> BudgetCategoryId {
+        self.0
+    }
+
+    pub fn name(&self) -> &str {
+        &self.1
+    }
+}
+
+// the choice of BTreeMap is ordered, therefore, we can easily generate a new UNIQUE id for each
+// category by increment the max index by one. Of course we *should* handle overflow but I doubt
+// someone's gonna create THOUSANDS OF CATEGORIES GODDAMMIT
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BudgetCategories(pub BTreeSet<BudgetCategory>);
 
 impl Default for BudgetCategories {
     fn default() -> Self {
-        BudgetCategories(HashSet::new())
+        BudgetCategories(BTreeSet::new())
     }
 }
 
@@ -128,7 +189,7 @@ pub struct Spendings(pub Vec<Spending>);
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MonthlyBudget {
-    pub budgets: HashMap<BudgetCategory, BudgetAmount>,
+    pub budgets: HashMap<BudgetCategoryId, BudgetAmount>,
     pub spendings: Spendings,
 }
 
