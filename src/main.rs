@@ -100,6 +100,7 @@ impl Widget for Win {
         cell.set_property_text_column(0);
         col.pack_start(&cell, true);
         col.add_attribute(&cell, "text", 1);
+        col.add_attribute(&cell, "background", 4);
         self.spendings_tree_view.append_column(&col);
 
         let col = gtk::TreeViewColumn::new();
@@ -225,23 +226,26 @@ impl Widget for Win {
             &year_combo_box,
         );
 
-        self.initialize_spendings_tree_view_headers();
-        let (_, spendings_model): (gtk::ListStore, gtk::ListStore) = self
+        let monthly_budget = self
             .model
             .file_loader
             .load_monthly_budget(self.model.selected_month, self.model.selected_year)
-            .unwrap()
-            .into();
-        self.spendings_tree_view.set_model(Some(&spendings_model));
-
+            .unwrap();
+        let budget_categories = self.model.file_loader.load_budget_categories().unwrap();
         self.initialize_budget_categories_headers();
-        let model: gtk::ListStore = self
-            .model
-            .file_loader
-            .load_budget_categories()
-            .unwrap()
-            .into();
-        self.budget_categories_tree_view.set_model(Some(&model));
+        self.initialize_spendings_tree_view_headers();
+
+        let budget_categories_model =
+            data_to_model::get_model_from_budget_categories_and_monthly_budget(
+                &budget_categories,
+                &monthly_budget,
+            );
+        self.budget_categories_tree_view
+            .set_model(Some(&budget_categories_model));
+
+        let spendings_model =
+            data_to_model::get_spendings_model(&monthly_budget, &budget_categories);
+        self.spendings_tree_view.set_model(Some(&spendings_model));
     }
 }
 
