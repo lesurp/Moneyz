@@ -285,6 +285,7 @@ impl Widget for MainWindow {
         debug!("Parsed amount: {}", amount);
         self.update_monthly_budget_moneyz_model_from_gtk_model();
         self.update_budget_categories_gtk_model_from_moneyz_model();
+        self.update_monthly_total_label_from_moneyz_model();
     }
 
     fn on_spending_name_cell_changed(&mut self, path: gtk::TreePath, value: String) {
@@ -386,6 +387,7 @@ impl Widget for MainWindow {
             .unwrap();
         self.update_budget_categories_gtk_model_from_moneyz_model();
         self.update_monthly_budget_gtk_model_from_moneyz_model();
+        self.update_monthly_total_label_from_moneyz_model();
 
         let day_model =
             list_model_from_month_year(self.model.selected_month, self.model.selected_year);
@@ -419,34 +421,37 @@ impl Widget for MainWindow {
     view! {
         gtk::Window {
             gtk::Box {
-                orientation: Vertical,
+                orientation: Horizontal,
                 #[name="config_box"]
                 gtk::Box {
-                    orientation: Horizontal,
-                    #[name="month_combo_box"]
-                    gtk::ComboBox {
-                        changed(_) => MoneyzMsg::ChangeSelectedDate,
-                        margin_start: MARGIN_LEFT,
-                        margin_end: MARGIN_BETWEEN,
+                    orientation: Vertical,
+                    gtk::Box {
+                        orientation: Horizontal,
+                        #[name="month_combo_box"]
+                        gtk::ComboBox {
+                            changed(_) => MoneyzMsg::ChangeSelectedDate,
+                            margin_start: MARGIN_LEFT,
+                            margin_end: MARGIN_BETWEEN,
+                        },
+                        #[name="year_combo_box"]
+                        gtk::ComboBox {
+                            changed(_) => MoneyzMsg::ChangeSelectedDate,
+                            margin_end: MARGIN_BETWEEN,
+                        },
                     },
-                    #[name="year_combo_box"]
-                    gtk::ComboBox {
-                        changed(_) => MoneyzMsg::ChangeSelectedDate,
-                        margin_end: MARGIN_BETWEEN,
-                    },
-                    #[name="config_button"]
-                    gtk::Button {
-                        label: "Configuration"
-                    },
-                },
-                gtk::Box {
-                    orientation: Horizontal,
                     #[name="spendings_tree_view"]
                     gtk::TreeView {
                         margin_start: MARGIN_LEFT,
                         margin_end: MARGIN_LEFT,
                     },
-                    gtk::Separator { orientation: Vertical },
+                },
+                gtk::Box {
+                    margin_start: MARGIN_LEFT,
+                    orientation: Vertical,
+                    #[name="monthly_budget_total_label"]
+                    gtk::Label {
+                        text: "Balance for this month: "
+                    },
                     #[name="budget_categories_tree_view"]
                     gtk::TreeView {
                         margin_start: MARGIN_LEFT,
@@ -489,6 +494,18 @@ impl Widget for MainWindow {
         );
         self.budget_categories_tree_view
             .set_model(Some(&budget_categories_model));
+    }
+
+    fn update_monthly_total_label_from_moneyz_model(&mut self) {
+        let total = self
+            .model
+            .monthly_budget
+            .spendings
+            .0
+            .iter()
+            .fold(0, |total, spending| total + spending.amount);
+        self.monthly_budget_total_label
+            .set_text(&format!("Balance for this month: {}", total));
     }
 
     fn update_monthly_budget_moneyz_model_from_gtk_model(&mut self) {
