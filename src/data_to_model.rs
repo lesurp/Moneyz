@@ -1,10 +1,86 @@
 use crate::data::*;
 use gtk::{GtkListStoreExtManual, StaticType, TreeModelExt};
 
+pub enum SpendingDayComboBoxIds {
+    Day = 0,
+}
+
+impl Into<i32> for SpendingDayComboBoxIds {
+    fn into(self) -> i32 {
+        self as i32
+    }
+}
+
+impl Into<u32> for SpendingDayComboBoxIds {
+    fn into(self) -> u32 {
+        self as u32
+    }
+}
+
+pub enum BudgetCategoryComboBoxIds {
+    Id = 0,
+    Name = 1,
+}
+
+impl Into<i32> for BudgetCategoryComboBoxIds {
+    fn into(self) -> i32 {
+        self as i32
+    }
+}
+
+impl Into<u32> for BudgetCategoryComboBoxIds {
+    fn into(self) -> u32 {
+        self as u32
+    }
+}
+
+pub enum BudgetCategoriesListStoreIds {
+    Id = 0,
+    Name = 1,
+    Amount = 2,
+    IsDefault = 3,
+}
+
+impl Into<i32> for BudgetCategoriesListStoreIds {
+    fn into(self) -> i32 {
+        self as i32
+    }
+}
+
+impl Into<u32> for BudgetCategoriesListStoreIds {
+    fn into(self) -> u32 {
+        self as u32
+    }
+}
+
+pub enum SpendingsGtkModelIds {
+    Name = 0,
+    CategoryId = 1,
+    CategoryName = 2,
+    Amount = 3,
+    Day = 4,
+    BackgroundColor = 5,
+    IsDefault = 6,
+}
+
+impl Into<i32> for SpendingsGtkModelIds {
+    fn into(self) -> i32 {
+        self as i32
+    }
+}
+
+impl Into<u32> for SpendingsGtkModelIds {
+    fn into(self) -> u32 {
+        self as u32
+    }
+}
+
 pub fn get_model_from_budget_categories_and_monthly_budget(
     budget_categories: &BudgetCategories,
     monthly_budget: &MonthlyBudget,
 ) -> gtk::ListStore {
+    use BudgetCategoriesListStoreIds::*;
+
     let list = gtk::ListStore::new(&[
         u32::static_type(),
         String::static_type(),
@@ -15,10 +91,10 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
         let budget_category_amount = monthly_budget
             .budgets
             .get(&budget_category.id())
-            .unwrap_or(&BudgetAmount(69));
+            .unwrap_or(&BudgetAmount(0));
         list.insert_with_values(
             None,
-            &[0, 1, 2, 3],
+            &[Id.into(), Name.into(), Amount.into(), IsDefault.into()],
             &[
                 &budget_category.id().0,
                 &budget_category.name(),
@@ -39,7 +115,7 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
     // manually add an empty row so users can add categories
     list.insert_with_values(
         None,
-        &[0, 1, 2, 3],
+        &[Id.into(), Name.into(), Amount.into(), IsDefault.into()],
         &[&next_category_id, &"New category", &0, &true],
     );
 
@@ -48,12 +124,30 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
 
 impl Into<gtk::ListStore> for BudgetCategories {
     fn into(self) -> gtk::ListStore {
+        use BudgetCategoryComboBoxIds::*;
         let list = gtk::ListStore::new(&[u32::static_type(), String::static_type()]);
         let mut i = 0;
         for budget_category in self.0 {
             list.insert_with_values(
                 Some(i),
-                &[0, 1],
+                &[Id.into(), Name.into()],
+                &[&budget_category.id().0, &budget_category.name()],
+            );
+            i += 1;
+        }
+        list
+    }
+}
+
+impl Into<gtk::ListStore> for &BudgetCategories {
+    fn into(self) -> gtk::ListStore {
+        use BudgetCategoryComboBoxIds::*;
+        let list = gtk::ListStore::new(&[u32::static_type(), String::static_type()]);
+        let mut i = 0;
+        for budget_category in &self.0 {
+            list.insert_with_values(
+                Some(i),
+                &[Id.into(), Name.into()],
                 &[&budget_category.id().0, &budget_category.name()],
             );
             i += 1;
@@ -66,6 +160,7 @@ pub fn get_spendings_model(
     monthly_budget: &MonthlyBudget,
     budget_categories: &BudgetCategories,
 ) -> gtk::ListStore {
+    use SpendingsGtkModelIds::*;
     let spendings_list = gtk::ListStore::new(&[
         // name
         String::static_type(),
@@ -102,7 +197,15 @@ pub fn get_spendings_model(
 
         spendings_list.insert_with_values(
             None,
-            &[0, 1, 2, 3, 4, 5, 6],
+            &[
+                Name.into(),
+                CategoryId.into(),
+                CategoryName.into(),
+                Amount.into(),
+                Day.into(),
+                BackgroundColor.into(),
+                IsDefault.into(),
+            ],
             &[
                 &spending.name,
                 &spending.budget_category.id().0,
@@ -116,21 +219,30 @@ pub fn get_spendings_model(
     }
     spendings_list.insert_with_values(
         None,
-        &[0, 1, 2, 3, 4, 5, 6],
+        &[
+            Name.into(),
+            CategoryId.into(),
+            CategoryName.into(),
+            Amount.into(),
+            Day.into(),
+            BackgroundColor.into(),
+            IsDefault.into(),
+        ],
         &[&"New spending", &0, &"", &0, &1, &"#ffffff", &true],
     );
     spendings_list
 }
 
 pub fn list_store_to_budget_categories(model: gtk::TreeModel) -> BudgetCategories {
+    use BudgetCategoriesListStoreIds::*;
     let mut budget_categories = BudgetCategories::default();
     model.foreach(|m, _, i| {
-        if m.get_value(i, 3).get().unwrap() {
+        if m.get_value(i, IsDefault.into()).get().unwrap() {
             return false;
         }
 
-        let id = m.get_value(i, 0).get().unwrap();
-        let name = m.get_value(i, 1).get().unwrap();
+        let id = m.get_value(i, Id.into()).get().unwrap();
+        let name = m.get_value(i, Name.into()).get().unwrap();
         budget_categories
             .0
             .insert(BudgetCategory(BudgetCategoryId(id), name));
@@ -146,40 +258,75 @@ pub fn list_store_to_monthly_budget(
     budget_categories_model: gtk::TreeModel,
 ) -> MonthlyBudget {
     let mut spendings = Spendings(Vec::new());
-    spendings_model.foreach(|m, _, i| {
-        if m.get_value(i, 6).get().unwrap() {
-            return false;
-        }
-        let name = m.get_value(i, 0).get().unwrap();
-        let category_id = m.get_value(i, 1).get().unwrap();
-        let category_name = m.get_value(i, 2).get().unwrap();
-        let amount = m.get_value(i, 3).get().unwrap();
-        let day = Day(m.get_value(i, 4).get().unwrap());
+    {
+        use SpendingsGtkModelIds::*;
+        spendings_model.foreach(|m, _, i| {
+            if m.get_value(i, IsDefault.into()).get().unwrap() {
+                return false;
+            }
+            let name = m.get_value(i, Name.into()).get().unwrap();
+            let category_id = m.get_value(i, CategoryId.into()).get().unwrap();
+            let category_name = m.get_value(i, CategoryName.into()).get().unwrap();
+            let amount = m.get_value(i, Amount.into()).get().unwrap();
+            let day = crate::data::Day(m.get_value(i, Day.into()).get().unwrap());
 
-        spendings.0.push(Spending {
-            name,
-            budget_category: BudgetCategory(BudgetCategoryId(category_id), category_name),
-            amount,
-            day,
+            spendings.0.push(Spending {
+                name,
+                budget_category: BudgetCategory(BudgetCategoryId(category_id), category_name),
+                amount,
+                day,
+            });
+
+            // false = continue; true = break
+            false
         });
-
-        // false = continue; true = break
-        false
-    });
+    }
 
     let mut budgets = std::collections::HashMap::new();
-    budget_categories_model.foreach(|m, _, i| {
-        if m.get_value(i, 3).get().unwrap() {
-            return false;
-        }
-        let id = m.get_value(i, 0).get().unwrap();
-        let amount = m.get_value(i, 2).get().unwrap();
+    {
+        use BudgetCategoriesListStoreIds::*;
+        budget_categories_model.foreach(|m, _, i| {
+            if m.get_value(i, IsDefault.into()).get().unwrap() {
+                return false;
+            }
+            let id = m.get_value(i, Id.into()).get().unwrap();
+            let amount = m.get_value(i, Amount.into()).get().unwrap();
 
-        budgets.insert(BudgetCategoryId(id), BudgetAmount(amount));
+            budgets.insert(BudgetCategoryId(id), BudgetAmount(amount));
 
-        // false = continue; true = break
-        false
-    });
+            // false = continue; true = break
+            false
+        });
+    }
 
     MonthlyBudget { budgets, spendings }
+}
+
+pub fn list_model_from_month_year(m: Month, y: Year) -> gtk::ListStore {
+    use SpendingDayComboBoxIds::Day;
+    let list = gtk::ListStore::new(&[u32::static_type()]);
+
+    let max_day = match m {
+        Month::Jan
+        | Month::Mar
+        | Month::May
+        | Month::Jul
+        | Month::Aug
+        | Month::Oct
+        | Month::Dec => 31,
+        Month::Apr | Month::Jun | Month::Sep | Month::Nov => 30,
+
+        Month::Feb => {
+            if (y.0 % 4 == 0 && y.0 % 100 != 0) || y.0 % 400 == 0 {
+                29
+            } else {
+                28
+            }
+        }
+    };
+
+    for i in 1..max_day + 1 {
+        list.insert_with_values(None, &[Day.into()], &[&i]);
+    }
+    list
 }
