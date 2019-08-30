@@ -1,6 +1,7 @@
 mod data;
 mod data_to_model;
 mod file_loader;
+mod translation_provider;
 
 const MARGIN_LEFT: i32 = 15;
 const MARGIN_BETWEEN: i32 = 3;
@@ -13,6 +14,7 @@ use gtk::*;
 use log::debug;
 use relm::{connect, connect_stream, Widget};
 use relm_derive::{widget, Msg};
+use translation_provider::TranslationProvider;
 
 const DATA_DIR: &str = "./data";
 const FIRST_YEAR: u32 = 2000;
@@ -29,6 +31,8 @@ pub struct MoneyzModel {
 
     budget_categories: data::BudgetCategories,
     monthly_budget: data::MonthlyBudget,
+
+    translation_provider: std::boxed::Box<dyn TranslationProvider>,
 }
 
 #[derive(Msg, Debug)]
@@ -67,6 +71,7 @@ impl Widget for Win {
             selected_year,
             budget_categories,
             monthly_budget,
+            translation_provider: translation_provider::get("fr"),
         }
     }
 
@@ -193,7 +198,7 @@ impl Widget for Win {
 
     fn initialize_month_year_combo_boxes(&self) {
         let cell = gtk::CellRendererText::new();
-        let month_model = create_and_fill_month_model();
+        let month_model = self.create_and_fill_month_model();
         self.month_combo_box.set_model(Some(&month_model));
         self.month_combo_box.pack_start(&cell, true);
         self.month_combo_box.add_attribute(&cell, "text", 0);
@@ -201,7 +206,7 @@ impl Widget for Win {
             .set_active(Some(self.model.selected_month as u32));
 
         let cell = gtk::CellRendererText::new();
-        let year_model = create_and_fill_year_model();
+        let year_model = self.create_and_fill_year_model();
         self.year_combo_box.set_model(Some(&year_model));
         self.year_combo_box.pack_start(&cell, true);
         self.year_combo_box.add_attribute(&cell, "text", 0);
@@ -394,7 +399,7 @@ impl Widget for Win {
         debug!(
             "month_combo_box: id is {}, which corresponds to the month {}",
             selected_month_id,
-            self.model.selected_month.display_string()
+            self.month_to_name(self.model.selected_month),
         );
 
         self.model.selected_year = if let Some(id) = self.year_combo_box.get_active() {
@@ -544,23 +549,41 @@ impl Widget for Win {
             .save_budget_categories(&self.model.budget_categories)
             .unwrap();
     }
-}
 
-fn create_and_fill_month_model() -> gtk::ListStore {
-    let model = gtk::ListStore::new(&[String::static_type()]);
-    for m_idx in 0 as u32..12 {
-        let m: Month = num_traits::FromPrimitive::from_u32(m_idx).unwrap();
-        model.insert_with_values(None, &[0], &[&m.display_string()]);
+    fn create_and_fill_month_model(&self) -> gtk::ListStore {
+        let model = gtk::ListStore::new(&[String::static_type()]);
+        for m_idx in 0 as u32..12 {
+            let m: Month = num_traits::FromPrimitive::from_u32(m_idx).unwrap();
+            model.insert_with_values(None, &[0], &[&self.month_to_name(m)]);
+        }
+        model
     }
-    model
-}
 
-fn create_and_fill_year_model() -> gtk::ListStore {
-    let model = gtk::ListStore::new(&[String::static_type()]);
-    for year in FIRST_YEAR..LAST_YEAR {
-        model.insert_with_values(None, &[0], &[&year.to_string()]);
+    fn create_and_fill_year_model(&self) -> gtk::ListStore {
+        let model = gtk::ListStore::new(&[String::static_type()]);
+        for year in FIRST_YEAR..LAST_YEAR {
+            model.insert_with_values(None, &[0], &[&year.to_string()]);
+        }
+        model
     }
-    model
+
+    fn month_to_name(&self, m: data::Month) -> String {
+        match m {
+            Month::Jan => &self.model.translation_provider.trans().jan,
+            Month::Feb => "february",
+            Month::Mar => "march",
+            Month::Apr => "april",
+            Month::May => "may",
+            Month::Jun => "june",
+            Month::Jul => "july",
+            Month::Aug => "august",
+            Month::Sep => "september",
+            Month::Oct => "october",
+            Month::Nov => "november",
+            Month::Dec => "december",
+        }
+        .to_owned()
+    }
 }
 
 fn main() {

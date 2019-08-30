@@ -20,24 +20,6 @@ pub enum Month {
 }
 
 impl Month {
-    pub fn display_string(self) -> String {
-        match self {
-            Month::Jan => "january",
-            Month::Feb => "february",
-            Month::Mar => "march",
-            Month::Apr => "april",
-            Month::May => "may",
-            Month::Jun => "june",
-            Month::Jul => "july",
-            Month::Aug => "august",
-            Month::Sep => "september",
-            Month::Oct => "october",
-            Month::Nov => "november",
-            Month::Dec => "december",
-        }
-        .to_owned()
-    }
-
     pub fn id(self) -> i32 {
         (self as i32) + 1
     }
