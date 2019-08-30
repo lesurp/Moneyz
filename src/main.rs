@@ -99,6 +99,15 @@ impl Widget for Win {
             relm.stream()
                 .emit(MoneyzMsg::BudgetAmountChanged(path, value.to_owned()));
         });
+
+        let col = gtk::TreeViewColumn::new();
+        col.set_title("Budget surplus");
+        let cell = gtk::CellRendererText::new();
+        cell.set_property_editable(false);
+        col.pack_start(&cell, true);
+        col.add_attribute(&cell, "text", Surplus.into());
+        col.add_attribute(&cell, "background", BackgroundColor.into());
+        self.budget_categories_tree_view.append_column(&col);
     }
 
     fn initialize_spendings_tree_view_headers(&mut self) {
@@ -217,6 +226,7 @@ impl Widget for Win {
         model.set_value(&iter, 2, &Value::from(&amount));
         debug!("Parsed amount: {}", amount);
         self.update_monthly_budget_moneyz_model_from_gtk_model();
+        self.update_budget_categories_gtk_model_from_moneyz_model();
     }
 
     fn on_category_name_changed(&mut self, path: gtk::TreePath, value: String) {
@@ -252,12 +262,14 @@ impl Widget for Win {
                     Id.into(),
                     Name.into(),
                     Amount.into(),
+                    Surplus.into(),
                     IsDefault.into(),
                     BackgroundColor.into(),
                 ],
                 &[
                     &(latest_id + 1),
                     &"New category",
+                    &0,
                     &0,
                     &true,
                     &data_to_model::BACKGROUND_COLOR_IS_DEFAULT,
@@ -307,6 +319,7 @@ impl Widget for Win {
         );
         debug!("Parsed amount: {}", amount);
         self.update_monthly_budget_moneyz_model_from_gtk_model();
+        self.update_budget_categories_gtk_model_from_moneyz_model();
     }
 
     fn on_spending_name_cell_changed(&mut self, path: gtk::TreePath, value: String) {
@@ -368,6 +381,7 @@ impl Widget for Win {
             &Value::from(&data_to_model::BACKGROUND_COLOR_NORMAL),
         );
         self.update_monthly_budget_moneyz_model_from_gtk_model();
+        self.update_budget_categories_gtk_model_from_moneyz_model();
     }
 
     fn on_change_selected_date(&mut self) {
@@ -395,7 +409,8 @@ impl Widget for Win {
             .file_loader
             .load_monthly_budget(self.model.selected_month, self.model.selected_year)
             .unwrap();
-        self.update_gtk_model_from_moneyz_model();
+        self.update_budget_categories_gtk_model_from_moneyz_model();
+        self.update_monthly_budget_gtk_model_from_moneyz_model();
 
         let day_model = data_to_model::list_model_from_month_year(
             self.model.selected_month,
@@ -481,10 +496,19 @@ impl Widget for Win {
             .unwrap();
         self.model.budget_categories = self.model.file_loader.load_budget_categories().unwrap();
 
-        self.update_gtk_model_from_moneyz_model();
+        self.update_budget_categories_gtk_model_from_moneyz_model();
+        self.update_monthly_budget_gtk_model_from_moneyz_model();
     }
 
-    fn update_gtk_model_from_moneyz_model(&self) {
+    fn update_monthly_budget_gtk_model_from_moneyz_model(&mut self) {
+        let spendings_model = data_to_model::get_spendings_model(
+            &self.model.monthly_budget,
+            &self.model.budget_categories,
+        );
+        self.spendings_tree_view.set_model(Some(&spendings_model));
+    }
+
+    fn update_budget_categories_gtk_model_from_moneyz_model(&mut self) {
         let budget_categories_model =
             data_to_model::get_model_from_budget_categories_and_monthly_budget(
                 &self.model.budget_categories,
@@ -492,12 +516,6 @@ impl Widget for Win {
             );
         self.budget_categories_tree_view
             .set_model(Some(&budget_categories_model));
-
-        let spendings_model = data_to_model::get_spendings_model(
-            &self.model.monthly_budget,
-            &self.model.budget_categories,
-        );
-        self.spendings_tree_view.set_model(Some(&spendings_model));
     }
 
     fn update_monthly_budget_moneyz_model_from_gtk_model(&mut self) {

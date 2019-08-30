@@ -43,8 +43,9 @@ pub enum BudgetCategoriesListStoreIds {
     Id = 0,
     Name = 1,
     Amount = 2,
-    IsDefault = 3,
-    BackgroundColor = 4,
+    Surplus = 3,
+    IsDefault = 4,
+    BackgroundColor = 5,
 }
 
 impl Into<i32> for BudgetCategoriesListStoreIds {
@@ -91,9 +92,17 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
         u32::static_type(),
         String::static_type(),
         i32::static_type(),
+        i32::static_type(),
         bool::static_type(),
         String::static_type(),
     ]);
+
+    // collect for each budget_category how much was spent and all
+    let mut spendings_per_budget = std::collections::HashMap::new();
+    for spending in &monthly_budget.spendings.0 {
+        *spendings_per_budget.entry(&spending.budget_category).or_insert(0) += spending.amount;
+    }
+
     for budget_category in &budget_categories.0 {
         let budget_category_amount = monthly_budget
             .budgets
@@ -105,6 +114,7 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
                 Id.into(),
                 Name.into(),
                 Amount.into(),
+                Surplus.into(),
                 IsDefault.into(),
                 BackgroundColor.into(),
             ],
@@ -112,6 +122,7 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
                 &budget_category.id().0,
                 &budget_category.name(),
                 &budget_category_amount.0,
+                &(budget_category_amount.0 - spendings_per_budget.get(&budget_category).unwrap_or(&0)),
                 &false,
                 &BACKGROUND_COLOR_NORMAL,
             ],
@@ -133,12 +144,14 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
             Id.into(),
             Name.into(),
             Amount.into(),
+            Surplus.into(),
             IsDefault.into(),
             BackgroundColor.into(),
         ],
         &[
             &next_category_id,
             &"New category",
+            &0,
             &0,
             &true,
             &BACKGROUND_COLOR_IS_DEFAULT,
