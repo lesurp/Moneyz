@@ -357,7 +357,9 @@ pub fn add_default_spending(model: &gtk::ListStore, today: Day) {
         ],
         &[
             &"New spending",
-            &0,
+            // TODO: see comment on the Spendings declaration on why we do that
+            // note: using an option would be better...
+            &u32::max_value(),
             &"",
             &0,
             &today.0,

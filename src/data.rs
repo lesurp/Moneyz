@@ -113,6 +113,8 @@ pub struct Spending {
     // we use a flag for default with a dummy category value,
     // when reloading the program we reload the line with the defualt id which is obv wrong
     // note that setting the default id to max u32 would also work...
+    // note2: Option<T> may not be that great if gtk doesn't support NULL model entries
+    // Then I'd still need a default value which would conflict with the Spending value...
     pub budget_category: BudgetCategory,
     pub amount: i32,
     // only a day, for the month and year should be known for each MonthlyBudget anyway
