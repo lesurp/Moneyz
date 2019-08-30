@@ -37,51 +37,6 @@ impl ToString for Year {
 #[derive(Serialize, Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone)]
 pub struct Day(pub i32);
 
-impl Day {
-    pub fn try_new(d: i32, m: Month, y: Year) -> Result<Day, ()> {
-        if d <= 0 {
-            return Err(());
-        }
-
-        match m {
-            Month::Jan
-            | Month::Mar
-            | Month::May
-            | Month::Jul
-            | Month::Aug
-            | Month::Oct
-            | Month::Dec => {
-                if d <= 31 {
-                    Ok(Day(d))
-                } else {
-                    Err(())
-                }
-            }
-            Month::Apr | Month::Jun | Month::Sep | Month::Nov => {
-                if d <= 30 {
-                    Ok(Day(d))
-                } else {
-                    Err(())
-                }
-            }
-
-            Month::Feb => {
-                if d <= 28 {
-                    Ok(Day(d))
-                } else if d == 29 {
-                    if (y.0 % 4 == 0 && y.0 % 100 != 0) || y.0 % 400 == 0 {
-                        Ok(Day(d))
-                    } else {
-                        Err(())
-                    }
-                } else {
-                    Err(())
-                }
-            }
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, Hash, Copy, Clone, PartialEq)]
 pub struct BudgetCategoryId(pub u32);
 
