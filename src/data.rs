@@ -82,18 +82,12 @@ impl Day {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Hash, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Hash, Copy, Clone, PartialEq)]
 pub struct BudgetCategoryId(pub u32);
 
 impl Ord for BudgetCategoryId {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.0.cmp(&other.0)
-    }
-}
-
-impl PartialEq for BudgetCategoryId {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
     }
 }
 

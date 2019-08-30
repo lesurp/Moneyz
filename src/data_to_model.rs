@@ -163,18 +163,7 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
 
 impl Into<gtk::ListStore> for BudgetCategories {
     fn into(self) -> gtk::ListStore {
-        use BudgetCategoryComboBoxIds::*;
-        let list = gtk::ListStore::new(&[u32::static_type(), String::static_type()]);
-        let mut i = 0;
-        for budget_category in self.0 {
-            list.insert_with_values(
-                Some(i),
-                &[Id.into(), Name.into()],
-                &[&budget_category.id().0, &budget_category.name()],
-            );
-            i += 1;
-        }
-        list
+        (&self).into()
     }
 }
 
@@ -182,14 +171,12 @@ impl Into<gtk::ListStore> for &BudgetCategories {
     fn into(self) -> gtk::ListStore {
         use BudgetCategoryComboBoxIds::*;
         let list = gtk::ListStore::new(&[u32::static_type(), String::static_type()]);
-        let mut i = 0;
         for budget_category in &self.0 {
             list.insert_with_values(
-                Some(i),
+                None,
                 &[Id.into(), Name.into()],
                 &[&budget_category.id().0, &budget_category.name()],
             );
-            i += 1;
         }
         list
     }
@@ -375,7 +362,7 @@ pub fn list_model_from_month_year(m: Month, y: Year) -> gtk::ListStore {
         }
     };
 
-    for i in 1..max_day + 1 {
+    for i in 1..=max_day {
         list.insert_with_values(None, &[Day.into()], &[&i.to_string()]);
     }
     list
