@@ -2,6 +2,9 @@ mod data;
 mod data_to_model;
 mod file_loader;
 
+const MARGIN_LEFT: i32 = 15;
+const MARGIN_BETWEEN: i32 = 3;
+
 use chrono::Datelike;
 use data::Month;
 use file_loader::FileLoader;
@@ -435,10 +438,13 @@ impl Widget for Win {
                     #[name="month_combo_box"]
                     gtk::ComboBox {
                         changed(_) => MoneyzMsg::ChangeSelectedDate,
+                        margin_start: MARGIN_LEFT,
+                        margin_end: MARGIN_BETWEEN,
                     },
                     #[name="year_combo_box"]
                     gtk::ComboBox {
                         changed(_) => MoneyzMsg::ChangeSelectedDate,
+                        margin_end: MARGIN_BETWEEN,
                     },
                     #[name="config_button"]
                     gtk::Button {
@@ -448,10 +454,15 @@ impl Widget for Win {
                 gtk::Box {
                     orientation: Horizontal,
                     #[name="spendings_tree_view"]
-                    gtk::TreeView {},
+                    gtk::TreeView {
+                        margin_start: MARGIN_LEFT,
+                        margin_end: MARGIN_LEFT,
+                    },
                     gtk::Separator { orientation: Vertical },
                     #[name="budget_categories_tree_view"]
-                    gtk::TreeView {},
+                    gtk::TreeView {
+                        margin_start: MARGIN_LEFT,
+                    },
                 },
             },
             delete_event(_, _) => (MoneyzMsg::Quit, Inhibit(false)),
