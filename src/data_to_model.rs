@@ -304,7 +304,7 @@ pub fn list_store_to_monthly_budget(
 
 pub fn list_model_from_month_year(m: Month, y: Year) -> gtk::ListStore {
     use SpendingDayComboBoxIds::Day;
-    let list = gtk::ListStore::new(&[u32::static_type()]);
+    let list = gtk::ListStore::new(&[String::static_type()]);
 
     let max_day = match m {
         Month::Jan
@@ -326,7 +326,7 @@ pub fn list_model_from_month_year(m: Month, y: Year) -> gtk::ListStore {
     };
 
     for i in 1..max_day + 1 {
-        list.insert_with_values(None, &[Day.into()], &[&i]);
+        list.insert_with_values(None, &[Day.into()], &[&i.to_string()]);
     }
     list
 }
