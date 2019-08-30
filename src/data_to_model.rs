@@ -1,6 +1,11 @@
 use crate::data::*;
 use gtk::{GtkListStoreExtManual, StaticType, TreeModelExt};
 
+pub const BACKGROUND_COLOR_NORMAL: &str = "#ffffff";
+pub const BACKGROUND_COLOR_IS_DEFAULT: &str = "#ddddee";
+pub const BACKGROUND_COLOR_WRONG_BUDGET_CATEGORY: &str = "eeddddd";
+pub const BACKGROUND_COLOR_RENAMED_BUDGET_CATEGORY: &str = "#ddeedd";
+
 pub enum SpendingDayComboBoxIds {
     Day = 0,
 }
@@ -39,6 +44,7 @@ pub enum BudgetCategoriesListStoreIds {
     Name = 1,
     Amount = 2,
     IsDefault = 3,
+    BackgroundColor = 4,
 }
 
 impl Into<i32> for BudgetCategoriesListStoreIds {
@@ -86,6 +92,7 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
         String::static_type(),
         i32::static_type(),
         bool::static_type(),
+        String::static_type(),
     ]);
     for budget_category in &budget_categories.0 {
         let budget_category_amount = monthly_budget
@@ -94,12 +101,19 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
             .unwrap_or(&BudgetAmount(0));
         list.insert_with_values(
             None,
-            &[Id.into(), Name.into(), Amount.into(), IsDefault.into()],
+            &[
+                Id.into(),
+                Name.into(),
+                Amount.into(),
+                IsDefault.into(),
+                BackgroundColor.into(),
+            ],
             &[
                 &budget_category.id().0,
                 &budget_category.name(),
                 &budget_category_amount.0,
                 &false,
+                &BACKGROUND_COLOR_NORMAL,
             ],
         );
     }
@@ -115,8 +129,20 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
     // manually add an empty row so users can add categories
     list.insert_with_values(
         None,
-        &[Id.into(), Name.into(), Amount.into(), IsDefault.into()],
-        &[&next_category_id, &"New category", &0, &true],
+        &[
+            Id.into(),
+            Name.into(),
+            Amount.into(),
+            IsDefault.into(),
+            BackgroundColor.into(),
+        ],
+        &[
+            &next_category_id,
+            &"New category",
+            &0,
+            &true,
+            &BACKGROUND_COLOR_IS_DEFAULT,
+        ],
     );
 
     list
@@ -184,15 +210,18 @@ pub fn get_spendings_model(
                 Some(budget_category) => {
                     if budget_category.name() == spending.budget_category.name() {
                         // Id and display string are the same - nothing special
-                        ("#ffffff", spending.budget_category.name())
+                        (BACKGROUND_COLOR_NORMAL, spending.budget_category.name())
                     } else {
                         // The id exists, but the category has been renamed - display the new one with a green background
-                        ("#ddeedd", budget_category.name())
+                        (
+                            BACKGROUND_COLOR_RENAMED_BUDGET_CATEGORY,
+                            budget_category.name(),
+                        )
                     }
                 }
-                // Id doesn't exist - the catewgory has been deleted
+                // Id doesn't exist - the category has been deleted
                 // We still show it, with a redbackground
-                None => ("#eedddd", spending.budget_category.name()),
+                None => (BACKGROUND_COLOR_WRONG_BUDGET_CATEGORY, spending.budget_category.name()),
             };
 
         spendings_list.insert_with_values(
@@ -228,7 +257,15 @@ pub fn get_spendings_model(
             BackgroundColor.into(),
             IsDefault.into(),
         ],
-        &[&"New spending", &0, &"", &0, &1, &"#ffffff", &true],
+        &[
+            &"New spending",
+            &0,
+            &"",
+            &0,
+            &1,
+            &BACKGROUND_COLOR_IS_DEFAULT,
+            &true,
+        ],
     );
     spendings_list
 }

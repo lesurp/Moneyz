@@ -68,12 +68,14 @@ impl Widget for Win {
     }
 
     fn initialize_budget_categories_headers(&self) {
+        use data_to_model::BudgetCategoriesListStoreIds::*;
         let col = gtk::TreeViewColumn::new();
         col.set_title("Budget category name");
         let cell = gtk::CellRendererText::new();
         cell.set_property_editable(true);
         col.pack_start(&cell, true);
-        col.add_attribute(&cell, "text", 1);
+        col.add_attribute(&cell, "text", Name.into());
+        col.add_attribute(&cell, "background", BackgroundColor.into());
         self.budget_categories_tree_view.append_column(&col);
         let relm = self.model.relm.clone();
         cell.connect_edited(move |_, path, value| {
@@ -86,7 +88,8 @@ impl Widget for Win {
         let cell = gtk::CellRendererText::new();
         cell.set_property_editable(true);
         col.pack_start(&cell, true);
-        col.add_attribute(&cell, "text", 2);
+        col.add_attribute(&cell, "text", Amount.into());
+        col.add_attribute(&cell, "background", BackgroundColor.into());
         self.budget_categories_tree_view.append_column(&col);
         let relm = self.model.relm.clone();
         cell.connect_edited(move |_, path, value| {
@@ -103,6 +106,7 @@ impl Widget for Win {
         cell.set_property_editable(true);
         col.pack_start(&cell, true);
         col.add_attribute(&cell, "text", Name.into());
+        col.add_attribute(&cell, "background", BackgroundColor.into());
         self.spendings_tree_view.append_column(&col);
         let relm = self.model.relm.clone();
         cell.connect_edited(move |_, path, value| {
@@ -143,6 +147,7 @@ impl Widget for Win {
         cell.set_property_editable(true);
         col.pack_start(&cell, true);
         col.add_attribute(&cell, "text", Amount.into());
+        col.add_attribute(&cell, "background", BackgroundColor.into());
         self.spendings_tree_view.append_column(&col);
         let relm = self.model.relm.clone();
         cell.connect_edited(move |_, path, value| {
@@ -150,7 +155,6 @@ impl Widget for Win {
                 .emit(MoneyzMsg::SpendingAmountCellChanged(path, value.to_owned()));
         });
 
-        // TODO: a drop down would be better
         let col = gtk::TreeViewColumn::new();
         col.set_title("Day");
         let cell = gtk::CellRendererCombo::new();
@@ -165,6 +169,7 @@ impl Widget for Win {
         cell.set_property_text_column(0);
         col.pack_start(&cell, true);
         col.add_attribute(&cell, "text", Day.into());
+        col.add_attribute(&cell, "background", BackgroundColor.into());
         let relm = self.model.relm.clone();
         cell.connect_edited(move |_, path, value| {
             relm.stream()
@@ -193,7 +198,6 @@ impl Widget for Win {
     }
 
     fn on_budget_amount_changed(&mut self, path: gtk::TreePath, value: String) {
-        debug!("MoneyzMsg::BudgetAmountChanged");
         debug!("Budget amount modified; new value: {}", value);
         let amount = if let Ok(amount) = value.parse::<i32>() {
             amount
@@ -214,7 +218,6 @@ impl Widget for Win {
 
     fn on_category_name_changed(&mut self, path: gtk::TreePath, value: String) {
         use data_to_model::BudgetCategoriesListStoreIds::*;
-        debug!("MoneyzMsg::CategoryNameChanged");
         debug!("Category name has been changed: {}", value);
         let tree_model = self.budget_categories_tree_view.get_model().unwrap();
         let model = tree_model.downcast::<gtk::ListStore>().unwrap();
@@ -234,11 +237,28 @@ impl Widget for Win {
         // if the row was the default one, change it to non-default then add another default one
         if model.get_value(&iter, IsDefault.into()).get().unwrap() {
             model.set_value(&iter, IsDefault.into(), &Value::from(&false));
+            model.set_value(
+                &iter,
+                BackgroundColor.into(),
+                &Value::from(&data_to_model::BACKGROUND_COLOR_NORMAL),
+            );
             let latest_id = model.get_value(&iter, Id.into()).get::<u32>().unwrap();
             model.insert_with_values(
                 None,
-                &[Id.into(), Name.into(), Amount.into(), IsDefault.into()],
-                &[&(latest_id + 1), &"New category", &0, &true],
+                &[
+                    Id.into(),
+                    Name.into(),
+                    Amount.into(),
+                    IsDefault.into(),
+                    BackgroundColor.into(),
+                ],
+                &[
+                    &(latest_id + 1),
+                    &"New category",
+                    &0,
+                    &true,
+                    &data_to_model::BACKGROUND_COLOR_IS_DEFAULT,
+                ],
             );
         }
         self.update_budget_categories_moneyz_model_from_gtk_model();
@@ -277,6 +297,11 @@ impl Widget for Win {
         let iter = model.get_iter(&path).unwrap();
         model.set_value(&iter, Amount.into(), &Value::from(&amount));
         model.set_value(&iter, IsDefault.into(), &Value::from(&false));
+        model.set_value(
+            &iter,
+            BackgroundColor.into(),
+            &Value::from(&data_to_model::BACKGROUND_COLOR_NORMAL),
+        );
         debug!("Parsed amount: {}", amount);
         self.update_monthly_budget_moneyz_model_from_gtk_model();
     }
@@ -289,6 +314,11 @@ impl Widget for Win {
         let iter = model.get_iter(&path).unwrap();
         model.set_value(&iter, Name.into(), &Value::from(&value));
         model.set_value(&iter, IsDefault.into(), &Value::from(&false));
+        model.set_value(
+            &iter,
+            BackgroundColor.into(),
+            &Value::from(&data_to_model::BACKGROUND_COLOR_NORMAL),
+        );
         self.update_monthly_budget_moneyz_model_from_gtk_model();
     }
 
@@ -303,6 +333,11 @@ impl Widget for Win {
         let iter = model.get_iter(&path).unwrap();
         model.set_value(&iter, Day.into(), &Value::from(&day));
         model.set_value(&iter, IsDefault.into(), &Value::from(&false));
+        model.set_value(
+            &iter,
+            BackgroundColor.into(),
+            &Value::from(&data_to_model::BACKGROUND_COLOR_NORMAL),
+        );
 
         self.update_monthly_budget_moneyz_model_from_gtk_model();
     }
@@ -324,6 +359,11 @@ impl Widget for Win {
         model.set_value(&iter, CategoryId.into(), &Value::from(&id.0));
         model.set_value(&iter, CategoryName.into(), &Value::from(&value));
         model.set_value(&iter, IsDefault.into(), &Value::from(&false));
+        model.set_value(
+            &iter,
+            BackgroundColor.into(),
+            &Value::from(&data_to_model::BACKGROUND_COLOR_NORMAL),
+        );
         self.update_monthly_budget_moneyz_model_from_gtk_model();
     }
 
