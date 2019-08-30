@@ -14,6 +14,7 @@ pub struct MoneyzModel {
 
     selected_month: data::Month,
     selected_year: data::Year,
+    today: data::Day,
 
     budget_categories: data::BudgetCategories,
     monthly_budget: data::MonthlyBudget,

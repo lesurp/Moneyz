@@ -1,11 +1,10 @@
-use crate::data::{
-    BudgetCategory, Month, Year,
-};
+use crate::data::{BudgetCategory, Day, Month, Year};
 use crate::data_to_model::{
+    add_default_budget_category, add_default_spending,
     get_model_from_budget_categories_and_monthly_budget, get_spendings_model,
     list_model_from_month_year, list_store_to_budget_categories, list_store_to_monthly_budget,
-    BudgetCategoriesListStoreIds, SpendingsGtkModelIds,
-    BACKGROUND_COLOR_IS_DEFAULT, BACKGROUND_COLOR_NORMAL,
+    order_spendings_by_day, BudgetCategoriesListStoreIds, SpendingsGtkModelIds,
+    BACKGROUND_COLOR_NORMAL,
 };
 use crate::file_loader::FileLoader;
 use crate::translation_provider;
@@ -27,6 +26,7 @@ const LAST_YEAR: u32 = 2100;
 impl Widget for MainWindow {
     fn model(relm: &relm::Relm<Self>, file_loader: FileLoader) -> MoneyzModel {
         let local: chrono::DateTime<chrono::Local> = chrono::Local::now();
+        let today = Day(local.date().day() as i32);
         let current_month = local.date().month() - 1; // chrono starts counting at 1
         let current_year = local.date().year();
         let selected_month: Month = num_traits::FromPrimitive::from_u32(current_month).unwrap();
@@ -44,6 +44,7 @@ impl Widget for MainWindow {
             spending_day_combox_box: None,
             selected_month,
             selected_year,
+            today,
             budget_categories,
             monthly_budget,
             translation_provider: translation_provider::get("fr"),
@@ -233,26 +234,8 @@ impl Widget for MainWindow {
                 BackgroundColor.into(),
                 &Value::from(&BACKGROUND_COLOR_NORMAL),
             );
-            let latest_id = model.get_value(&iter, Id.into()).get::<u32>().unwrap();
-            model.insert_with_values(
-                None,
-                &[
-                    Id.into(),
-                    Name.into(),
-                    Amount.into(),
-                    Surplus.into(),
-                    IsDefault.into(),
-                    BackgroundColor.into(),
-                ],
-                &[
-                    &(latest_id + 1),
-                    &"New category",
-                    &0,
-                    &0,
-                    &true,
-                    &BACKGROUND_COLOR_IS_DEFAULT,
-                ],
-            );
+            let max_id = model.get_value(&iter, Id.into()).get::<u32>().unwrap();
+            add_default_budget_category(&model, max_id);
         }
         self.update_budget_categories_moneyz_model_from_gtk_model();
 
@@ -263,6 +246,7 @@ impl Widget for MainWindow {
             .set_model(Some(&get_spendings_model(
                 &self.model.monthly_budget,
                 &self.model.budget_categories,
+                self.model.today,
             )));
         self.update_monthly_budget_moneyz_model_from_gtk_model();
 
@@ -289,12 +273,15 @@ impl Widget for MainWindow {
         let model = tree_model.downcast::<gtk::ListStore>().unwrap();
         let iter = model.get_iter(&path).unwrap();
         model.set_value(&iter, Amount.into(), &Value::from(&amount));
-        model.set_value(&iter, IsDefault.into(), &Value::from(&false));
         model.set_value(
             &iter,
             BackgroundColor.into(),
             &Value::from(&BACKGROUND_COLOR_NORMAL),
         );
+        if model.get_value(&iter, IsDefault.into()).get().unwrap() {
+            model.set_value(&iter, IsDefault.into(), &Value::from(&false));
+            add_default_spending(&model, self.model.today);
+        }
         debug!("Parsed amount: {}", amount);
         self.update_monthly_budget_moneyz_model_from_gtk_model();
         self.update_budget_categories_gtk_model_from_moneyz_model();
@@ -307,12 +294,15 @@ impl Widget for MainWindow {
         let model = tree_model.downcast::<gtk::ListStore>().unwrap();
         let iter = model.get_iter(&path).unwrap();
         model.set_value(&iter, Name.into(), &Value::from(&value));
-        model.set_value(&iter, IsDefault.into(), &Value::from(&false));
         model.set_value(
             &iter,
             BackgroundColor.into(),
             &Value::from(&BACKGROUND_COLOR_NORMAL),
         );
+        if model.get_value(&iter, IsDefault.into()).get().unwrap() {
+            model.set_value(&iter, IsDefault.into(), &Value::from(&false));
+            add_default_spending(&model, self.model.today);
+        }
         self.update_monthly_budget_moneyz_model_from_gtk_model();
     }
 
@@ -326,12 +316,16 @@ impl Widget for MainWindow {
         let model = tree_model.downcast::<gtk::ListStore>().unwrap();
         let iter = model.get_iter(&path).unwrap();
         model.set_value(&iter, Day.into(), &Value::from(&day));
-        model.set_value(&iter, IsDefault.into(), &Value::from(&false));
         model.set_value(
             &iter,
             BackgroundColor.into(),
             &Value::from(&BACKGROUND_COLOR_NORMAL),
         );
+        if model.get_value(&iter, IsDefault.into()).get().unwrap() {
+            model.set_value(&iter, IsDefault.into(), &Value::from(&false));
+            order_spendings_by_day(&model);
+            add_default_spending(&model, self.model.today);
+        }
 
         self.update_monthly_budget_moneyz_model_from_gtk_model();
     }
@@ -352,12 +346,15 @@ impl Widget for MainWindow {
         let iter = model.get_iter(&path).unwrap();
         model.set_value(&iter, CategoryId.into(), &Value::from(&id.0));
         model.set_value(&iter, CategoryName.into(), &Value::from(&value));
-        model.set_value(&iter, IsDefault.into(), &Value::from(&false));
         model.set_value(
             &iter,
             BackgroundColor.into(),
             &Value::from(&BACKGROUND_COLOR_NORMAL),
         );
+        if model.get_value(&iter, IsDefault.into()).get().unwrap() {
+            model.set_value(&iter, IsDefault.into(), &Value::from(&false));
+            add_default_spending(&model, self.model.today);
+        }
         self.update_monthly_budget_moneyz_model_from_gtk_model();
         self.update_budget_categories_gtk_model_from_moneyz_model();
     }
@@ -477,8 +474,11 @@ impl Widget for MainWindow {
     }
 
     fn update_monthly_budget_gtk_model_from_moneyz_model(&mut self) {
-        let spendings_model =
-            get_spendings_model(&self.model.monthly_budget, &self.model.budget_categories);
+        let spendings_model = get_spendings_model(
+            &self.model.monthly_budget,
+            &self.model.budget_categories,
+            self.model.today,
+        );
         self.spendings_tree_view.set_model(Some(&spendings_model));
     }
 

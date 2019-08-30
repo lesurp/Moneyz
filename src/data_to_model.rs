@@ -1,9 +1,10 @@
 use crate::data::*;
 use gtk::{GtkListStoreExtManual, StaticType, TreeModelExt};
+use log::debug;
 
 pub const BACKGROUND_COLOR_NORMAL: &str = "#ffffff";
 pub const BACKGROUND_COLOR_IS_DEFAULT: &str = "#ddddee";
-pub const BACKGROUND_COLOR_WRONG_BUDGET_CATEGORY: &str = "eeddddd";
+pub const BACKGROUND_COLOR_WRONG_BUDGET_CATEGORY: &str = "#eedddd";
 pub const BACKGROUND_COLOR_RENAMED_BUDGET_CATEGORY: &str = "#ddeedd";
 
 pub enum SpendingDayComboBoxIds {
@@ -100,7 +101,9 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
     // collect for each budget_category how much was spent and all
     let mut spendings_per_budget = std::collections::HashMap::new();
     for spending in &monthly_budget.spendings.0 {
-        *spendings_per_budget.entry(&spending.budget_category).or_insert(0) += spending.amount;
+        *spendings_per_budget
+            .entry(&spending.budget_category)
+            .or_insert(0) += spending.amount;
     }
 
     for budget_category in &budget_categories.0 {
@@ -122,7 +125,8 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
                 &budget_category.id().0,
                 &budget_category.name(),
                 &budget_category_amount.0,
-                &(budget_category_amount.0 - spendings_per_budget.get(&budget_category).unwrap_or(&0)),
+                &(budget_category_amount.0
+                    - spendings_per_budget.get(&budget_category).unwrap_or(&0)),
                 &false,
                 &BACKGROUND_COLOR_NORMAL,
             ],
@@ -130,34 +134,14 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
     }
 
     // get the maximum id and increments it by one, or initialize first id at 0
-    let next_category_id = budget_categories
+    let max_category_id = budget_categories
         .0
         .iter()
         .last()
-        .map(|max_id_category| max_id_category.id().0 + 1)
+        .map(|max_category_id| max_category_id.id().0)
         .unwrap_or(0);
 
-    // manually add an empty row so users can add categories
-    list.insert_with_values(
-        None,
-        &[
-            Id.into(),
-            Name.into(),
-            Amount.into(),
-            Surplus.into(),
-            IsDefault.into(),
-            BackgroundColor.into(),
-        ],
-        &[
-            &next_category_id,
-            &"New category",
-            &0,
-            &0,
-            &true,
-            &BACKGROUND_COLOR_IS_DEFAULT,
-        ],
-    );
-
+    add_default_budget_category(&list, max_category_id);
     list
 }
 
@@ -185,6 +169,7 @@ impl Into<gtk::ListStore> for &BudgetCategories {
 pub fn get_spendings_model(
     monthly_budget: &MonthlyBudget,
     budget_categories: &BudgetCategories,
+    today: Day,
 ) -> gtk::ListStore {
     use SpendingsGtkModelIds::*;
     let spendings_list = gtk::ListStore::new(&[
@@ -212,6 +197,11 @@ pub fn get_spendings_model(
                         // Id and display string are the same - nothing special
                         (BACKGROUND_COLOR_NORMAL, spending.budget_category.name())
                     } else {
+                        debug!(
+                            "Id exists but names re different. Old name: {}",
+                            spending.budget_category.name()
+                        );
+                        debug!("New name: {}", budget_category.name());
                         // The id exists, but the category has been renamed - display the new one with a green background
                         (
                             BACKGROUND_COLOR_RENAMED_BUDGET_CATEGORY,
@@ -221,7 +211,10 @@ pub fn get_spendings_model(
                 }
                 // Id doesn't exist - the category has been deleted
                 // We still show it, with a redbackground
-                None => (BACKGROUND_COLOR_WRONG_BUDGET_CATEGORY, spending.budget_category.name()),
+                None => (
+                    BACKGROUND_COLOR_WRONG_BUDGET_CATEGORY,
+                    spending.budget_category.name(),
+                ),
             };
 
         spendings_list.insert_with_values(
@@ -246,27 +239,8 @@ pub fn get_spendings_model(
             ],
         );
     }
-    spendings_list.insert_with_values(
-        None,
-        &[
-            Name.into(),
-            CategoryId.into(),
-            CategoryName.into(),
-            Amount.into(),
-            Day.into(),
-            BackgroundColor.into(),
-            IsDefault.into(),
-        ],
-        &[
-            &"New spending",
-            &0,
-            &"",
-            &0,
-            &1,
-            &BACKGROUND_COLOR_IS_DEFAULT,
-            &true,
-        ],
-    );
+    order_spendings_by_day(&spendings_list);
+    add_default_spending(&spendings_list, today);
     spendings_list
 }
 
@@ -366,4 +340,72 @@ pub fn list_model_from_month_year(m: Month, y: Year) -> gtk::ListStore {
         list.insert_with_values(None, &[Day.into()], &[&i.to_string()]);
     }
     list
+}
+
+pub fn add_default_spending(model: &gtk::ListStore, today: Day) {
+    use SpendingsGtkModelIds::*;
+    model.insert_with_values(
+        None,
+        &[
+            Name.into(),
+            CategoryId.into(),
+            CategoryName.into(),
+            Amount.into(),
+            Day.into(),
+            BackgroundColor.into(),
+            IsDefault.into(),
+        ],
+        &[
+            &"New spending",
+            &0,
+            &"",
+            &0,
+            &today.0,
+            &BACKGROUND_COLOR_IS_DEFAULT,
+            &true,
+        ],
+    );
+}
+
+pub fn add_default_budget_category(model: &gtk::ListStore, max_id: u32) {
+    use BudgetCategoriesListStoreIds::*;
+    model.insert_with_values(
+        None,
+        &[
+            Id.into(),
+            Name.into(),
+            Amount.into(),
+            Surplus.into(),
+            IsDefault.into(),
+            BackgroundColor.into(),
+        ],
+        &[
+            &(max_id + 1),
+            &"New category",
+            &0,
+            &0,
+            &true,
+            &BACKGROUND_COLOR_IS_DEFAULT,
+        ],
+    );
+}
+
+pub fn order_spendings_by_day(model: &gtk::ListStore) {
+    let mut sorting_by_day_vec = Vec::new();
+    let mut i = 0;
+    model.foreach(|m, _, iter| {
+        let day = m
+            .get_value(iter, SpendingsGtkModelIds::Day.into())
+            .get::<i32>()
+            .unwrap();
+        sorting_by_day_vec.push((i, day));
+        i += 1;
+        false
+    });
+    sorting_by_day_vec.sort_by(|(_, d1), (_, d2)| d1.partial_cmp(d2).unwrap());
+    let ordering_array = sorting_by_day_vec
+        .iter()
+        .map(|(i, _)| *i as u32)
+        .collect::<Vec<_>>();
+    model.reorder(&ordering_array);
 }

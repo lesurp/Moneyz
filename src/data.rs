@@ -109,6 +109,10 @@ pub struct BudgetAmount(pub i32);
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Spending {
     pub name: String,
+    // TODO: need to use Option<T>
+    // we use a flag for default with a dummy category value,
+    // when reloading the program we reload the line with the defualt id which is obv wrong
+    // note that setting the default id to max u32 would also work...
     pub budget_category: BudgetCategory,
     pub amount: i32,
     // only a day, for the month and year should be known for each MonthlyBudget anyway
