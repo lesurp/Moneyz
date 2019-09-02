@@ -1,6 +1,6 @@
 use crate::data::{BudgetCategory, Day, Month, Year};
 use crate::data_to_model::{
-    add_default_budget_category, add_default_spending,
+    add_default_budget_category, add_default_spending, amount_to_color,
     get_model_from_budget_categories_and_monthly_budget, get_spendings_model,
     list_model_from_month_year, list_store_to_budget_categories, list_store_to_monthly_budget,
     order_spendings_by_day, BudgetCategoriesListStoreIds, SpendingsGtkModelIds,
@@ -82,12 +82,12 @@ impl Widget for MainWindow {
         });
 
         let col = gtk::TreeViewColumn::new();
-        col.set_title("Budget surplus");
+        col.set_title("Budget balance");
         let cell = gtk::CellRendererText::new();
         cell.set_property_editable(false);
         col.pack_start(&cell, true);
-        col.add_attribute(&cell, "text", Surplus.into());
-        col.add_attribute(&cell, "background", BackgroundColor.into());
+        col.add_attribute(&cell, "text", Balance.into());
+        col.add_attribute(&cell, "background", BalanceCellBackgroundColor.into());
         self.budget_categories_tree_view.append_column(&col);
     }
 
@@ -140,7 +140,7 @@ impl Widget for MainWindow {
         cell.set_property_editable(true);
         col.pack_start(&cell, true);
         col.add_attribute(&cell, "text", Amount.into());
-        col.add_attribute(&cell, "background", BackgroundColor.into());
+        col.add_attribute(&cell, "background", AmountCellBackgroundColor.into());
         self.spendings_tree_view.append_column(&col);
         let relm = self.model.relm.clone();
         cell.connect_edited(move |_, path, value| {
@@ -275,10 +275,15 @@ impl Widget for MainWindow {
         model.set_value(&iter, Amount.into(), &Value::from(&amount));
         model.set_value(
             &iter,
-            BackgroundColor.into(),
-            &Value::from(&BACKGROUND_COLOR_NORMAL),
+            AmountCellBackgroundColor.into(),
+            &Value::from(&amount_to_color(amount)),
         );
         if model.get_value(&iter, IsDefault.into()).get().unwrap() {
+            model.set_value(
+                &iter,
+                BackgroundColor.into(),
+                &Value::from(&BACKGROUND_COLOR_NORMAL),
+            );
             model.set_value(&iter, IsDefault.into(), &Value::from(&false));
             add_default_spending(&model, self.model.today);
         }

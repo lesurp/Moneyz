@@ -6,6 +6,9 @@ pub const BACKGROUND_COLOR_NORMAL: &str = "#ffffff";
 pub const BACKGROUND_COLOR_IS_DEFAULT: &str = "#ddddee";
 pub const BACKGROUND_COLOR_WRONG_BUDGET_CATEGORY: &str = "#eedddd";
 pub const BACKGROUND_COLOR_RENAMED_BUDGET_CATEGORY: &str = "#ddeedd";
+pub const BACKGROUND_COLOR_DEBIT: &str = "#f00";
+pub const BACKGROUND_COLOR_CREDIT: &str = "#0f0";
+pub const BACKGROUND_COLOR_NULL: &str = "#ff0";
 
 pub enum SpendingDayComboBoxIds {
     Day = 0,
@@ -44,9 +47,10 @@ pub enum BudgetCategoriesListStoreIds {
     Id = 0,
     Name = 1,
     Amount = 2,
-    Surplus = 3,
+    Balance = 3,
     IsDefault = 4,
     BackgroundColor = 5,
+    BalanceCellBackgroundColor = 6,
 }
 
 impl Into<i32> for BudgetCategoriesListStoreIds {
@@ -69,6 +73,7 @@ pub enum SpendingsGtkModelIds {
     Day = 4,
     BackgroundColor = 5,
     IsDefault = 6,
+    AmountCellBackgroundColor = 7,
 }
 
 impl Into<i32> for SpendingsGtkModelIds {
@@ -96,12 +101,13 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
         i32::static_type(),
         bool::static_type(),
         String::static_type(),
+        String::static_type(),
     ]);
 
     // collect for each budget_category how much was spent and all
-    let mut spendings_per_budget = std::collections::HashMap::new();
+    let mut balance_per_budget = std::collections::HashMap::new();
     for spending in &monthly_budget.spendings.0 {
-        *spendings_per_budget
+        *balance_per_budget
             .entry(&spending.budget_category)
             .or_insert(0) += spending.amount;
     }
@@ -111,24 +117,29 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
             .budgets
             .get(&budget_category.id())
             .unwrap_or(&BudgetAmount(0));
+        let balance_cell_color = amount_to_color(
+            budget_category_amount.0 + balance_per_budget.get(&budget_category).unwrap_or(&0),
+        );
         list.insert_with_values(
             None,
             &[
                 Id.into(),
                 Name.into(),
                 Amount.into(),
-                Surplus.into(),
+                Balance.into(),
                 IsDefault.into(),
                 BackgroundColor.into(),
+                BalanceCellBackgroundColor.into(),
             ],
             &[
                 &budget_category.id().0,
                 &budget_category.name(),
                 &budget_category_amount.0,
                 &(budget_category_amount.0
-                    - spendings_per_budget.get(&budget_category).unwrap_or(&0)),
+                    + balance_per_budget.get(&budget_category).unwrap_or(&0)),
                 &false,
                 &BACKGROUND_COLOR_NORMAL,
+                &balance_cell_color,
             ],
         );
     }
@@ -187,6 +198,8 @@ pub fn get_spendings_model(
         String::static_type(),
         // is_default
         bool::static_type(),
+        // background color (if money in or out)
+        String::static_type(),
     ]);
 
     for spending in &monthly_budget.spendings.0 {
@@ -217,6 +230,8 @@ pub fn get_spendings_model(
                 ),
             };
 
+        let amount_cell_background_color = amount_to_color(spending.amount);
+
         spendings_list.insert_with_values(
             None,
             &[
@@ -227,6 +242,7 @@ pub fn get_spendings_model(
                 Day.into(),
                 BackgroundColor.into(),
                 IsDefault.into(),
+                AmountCellBackgroundColor.into(),
             ],
             &[
                 &spending.name,
@@ -236,6 +252,7 @@ pub fn get_spendings_model(
                 &spending.day.0,
                 &category_color,
                 &false,
+                &amount_cell_background_color,
             ],
         );
     }
@@ -354,6 +371,7 @@ pub fn add_default_spending(model: &gtk::ListStore, today: Day) {
             Day.into(),
             BackgroundColor.into(),
             IsDefault.into(),
+            AmountCellBackgroundColor.into(),
         ],
         &[
             &"New spending",
@@ -365,6 +383,7 @@ pub fn add_default_spending(model: &gtk::ListStore, today: Day) {
             &today.0,
             &BACKGROUND_COLOR_IS_DEFAULT,
             &true,
+            &BACKGROUND_COLOR_IS_DEFAULT,
         ],
     );
 }
@@ -377,9 +396,10 @@ pub fn add_default_budget_category(model: &gtk::ListStore, max_id: u32) {
             Id.into(),
             Name.into(),
             Amount.into(),
-            Surplus.into(),
+            Balance.into(),
             IsDefault.into(),
             BackgroundColor.into(),
+            BalanceCellBackgroundColor.into(),
         ],
         &[
             &(max_id + 1),
@@ -387,6 +407,7 @@ pub fn add_default_budget_category(model: &gtk::ListStore, max_id: u32) {
             &0,
             &0,
             &true,
+            &BACKGROUND_COLOR_IS_DEFAULT,
             &BACKGROUND_COLOR_IS_DEFAULT,
         ],
     );
@@ -410,4 +431,12 @@ pub fn order_spendings_by_day(model: &gtk::ListStore) {
         .map(|(i, _)| *i as u32)
         .collect::<Vec<_>>();
     model.reorder(&ordering_array);
+}
+
+pub fn amount_to_color(amount: i32) -> &'static str {
+    match amount.cmp(&0) {
+        std::cmp::Ordering::Greater => BACKGROUND_COLOR_CREDIT,
+        std::cmp::Ordering::Equal => BACKGROUND_COLOR_NULL,
+        std::cmp::Ordering::Less => BACKGROUND_COLOR_DEBIT,
+    }
 }
