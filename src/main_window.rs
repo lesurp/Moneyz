@@ -47,7 +47,7 @@ impl Widget for MainWindow {
             today,
             budget_categories,
             monthly_budget,
-            translation_provider: translation_provider::get("fr"),
+            translation_provider: translation_provider::get_provider("fr").expect("Language ID does not exist!"),
         }
     }
 
@@ -509,8 +509,11 @@ impl Widget for MainWindow {
             .0
             .iter()
             .fold(0, |total, spending| total + spending.amount);
+        // TODO: gotta store the amount in cents!
+        let whole = total;
+        let cents = 0;
         self.monthly_budget_total_label
-            .set_text(&format!("Balance for this month: {}", total));
+            .set_text(&format!("Balance for this month: {}", self.model.translation_provider.format_money(whole, cents).unwrap()));
     }
 
     fn update_monthly_budget_moneyz_model_from_gtk_model(&mut self) {
@@ -558,19 +561,18 @@ impl Widget for MainWindow {
 
     fn month_to_name(&self, m: Month) -> String {
         match m {
-            Month::Jan => &self.model.translation_provider.trans().jan,
-            Month::Feb => "february",
-            Month::Mar => "march",
-            Month::Apr => "april",
-            Month::May => "may",
-            Month::Jun => "june",
-            Month::Jul => "july",
-            Month::Aug => "august",
-            Month::Sep => "september",
-            Month::Oct => "october",
-            Month::Nov => "november",
-            Month::Dec => "december",
+            Month::Jan => self.model.translation_provider.january(),
+            Month::Feb => self.model.translation_provider.february(),
+            Month::Mar => self.model.translation_provider.march(),
+            Month::Apr => self.model.translation_provider.april(),
+            Month::May => self.model.translation_provider.may(),
+            Month::Jun => self.model.translation_provider.june(),
+            Month::Jul => self.model.translation_provider.july(),
+            Month::Aug => self.model.translation_provider.august(),
+            Month::Sep => self.model.translation_provider.september(),
+            Month::Oct => self.model.translation_provider.october(),
+            Month::Nov => self.model.translation_provider.november(),
+            Month::Dec => self.model.translation_provider.december(),
         }
-        .to_owned()
     }
 }

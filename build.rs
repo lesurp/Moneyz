@@ -1,113 +1,66 @@
-use proc_macro2;
 use quote::quote;
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Write;
-use syn;
+use std::io::{Read, Write};
+use strfmt;
+use translation_provider::generate_translation;
 
-macro_rules! code_to_string {
-    ($translation_def:item $trait_def:item) => {
-        $translation_def
-
-        $trait_def
-
-        fn translation_def() -> &'static str {
-            stringify!($translation_def)
-        }
-
-        fn trait_def() -> &'static str {
-            stringify!($trait_def)
-        }
-    }
+generate_translation! {
+    january,
+    february,
+    march,
+    april,
+    may,
+    june,
+    july,
+    august,
+    september,
+    october,
+    november,
+    december,
+    format_money(whole: i32, cents: i32),
 }
 
-code_to_string! {
-#[derive(serde::Deserialize, Debug)]
-pub struct Translation {
-    pub jan: String,
-    pub feb: String,
-}
+//    format_money(whole: i32, decimal: i32),
+fn main() {
+    let mut locale_to_translation: HashMap<String, TranslationProvider> = HashMap::new();
 
-pub trait TranslationProvider {
-    fn trans(&self) -> &Translation;
-}
-}
-
-pub fn main() {
-    let mut locale_to_translation: HashMap<String, Translation> = HashMap::new();
-
+    let mut get_fn = quote! {};
     for entry in std::fs::read_dir("translations").expect("Could not open translation directory") {
         let entry = entry.unwrap();
         let path = entry.path();
-        let file = File::open(&path).unwrap();
-        let reader = std::io::BufReader::new(file);
-        let translation: Translation =
-            serde_json::from_reader(reader).expect("Could not deserialize file");
-        locale_to_translation.insert(
-            path.file_stem().unwrap().to_owned().into_string().unwrap(),
-            translation,
-        );
-    }
+        let filename_no_ext = path.file_stem().unwrap().to_owned().into_string().unwrap();
+        let mut file = File::open(&path).unwrap();
+        let mut content = String::new();
+        file.read_to_string(&mut content)
+            .expect("Could not read translation file");
+        // making sure the file is correct - but this step could be skipped
+        let translation: TranslationProvider =
+            serde_json::from_str(&content).expect("Could not deserialize file");
+        // the joy of OsString -> String
+        locale_to_translation.insert(filename_no_ext.clone(), translation);
 
-    let mut get_fn = quote! {};
-    let mut struct_generation = quote! {};
-
-    for (locale_name, tr) in &locale_to_translation {
-        let mut v: Vec<char> = locale_name.chars().collect();
-        v[0] = v[0].to_uppercase().nth(0).unwrap();
-        let name: String = v.into_iter().collect();
-        let name = syn::Ident::new(&name, proc_macro2::Span::call_site());
-        let rust_compatible_str = format!("{:?}", tr)
-            // non-last elements have a comma
-            .replace("\",", "\".to_owned(),")
-            // last element only has the closing brace
-            .replace("\" }", "\".to_owned() }");
-        let tr: syn::ExprStruct = syn::parse_str(&rust_compatible_str).unwrap();
-
-        struct_generation = quote! {
-            #struct_generation
-
-            #[warn(non_camel_case_types)]
-            struct #name(Translation);
-            impl #name {
-                pub fn new() -> #name {
-                    #name(
-                        #tr
-                        )
-                }
-            }
-
-            impl TranslationProvider for #name {
-                fn trans(&self) -> &Translation {
-                    &self.0
-                }
-            }
-        };
-
+        // we use the filename as the key to get the TranslationProvider
         get_fn = quote! {
-            #get_fn
-            #locale_name => Box::new(#name::new()),
-        };
+                #get_fn
+                #filename_no_ext => #content,
+        }
     }
 
-    // TODO: hardocding the default... is ok I guess?
     get_fn = quote! {
-        pub fn get(locale: &str) -> Box<dyn TranslationProvider> {
-            match locale {
+    pub fn get_provider(locale_id: &str) -> Option<TranslationProvider> {
+        serde_json::from_str(match locale_id {
                 #get_fn
-                _ => Box::new(En::new()),
-            }
-            }
+                _ => return None,
+        }).expect("TranslationProvider construction failed - the build is corrupted!")
+    }
     };
 
     let out_dir = std::env::var("OUT_DIR").unwrap();
     let dest_path = std::path::Path::new(&out_dir).join("translation_provider_generated.rs");
     let mut f = File::create(&dest_path).unwrap();
-    f.write(translation_def().as_bytes()).unwrap();
-    f.write("\n".as_bytes()).unwrap();
-    f.write(trait_def().as_bytes()).unwrap();
-    f.write("\n".as_bytes()).unwrap();
-    f.write(struct_generation.to_string().as_bytes()).unwrap();
+    f.write(TranslationProvider::generated_code().as_bytes())
+        .unwrap();
     f.write("\n".as_bytes()).unwrap();
     f.write(get_fn.to_string().as_bytes()).unwrap();
 }

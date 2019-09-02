@@ -19,7 +19,7 @@ pub struct MoneyzModel {
     budget_categories: data::BudgetCategories,
     monthly_budget: data::MonthlyBudget,
 
-    translation_provider: std::boxed::Box<dyn translation_provider::TranslationProvider>,
+    translation_provider: translation_provider::TranslationProvider,
 }
 
 #[derive(relm_derive::Msg, Debug)]
