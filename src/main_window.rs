@@ -7,7 +7,7 @@ use crate::data_to_model::{
     BACKGROUND_COLOR_NORMAL,
 };
 use crate::file_loader::FileLoader;
-use crate::translation_provider;
+use crate::translation_provider::TranslationProvider;
 use crate::{MoneyzModel, MoneyzMsg};
 use chrono::Datelike;
 use gtk::Orientation::{Horizontal, Vertical};
@@ -36,6 +36,12 @@ impl Widget for MainWindow {
         // today's), the callback already takes care of loading the model
         let budget_categories = Default::default();
         let monthly_budget = Default::default();
+        let config = file_loader
+            .load_config()
+            .expect("Could not load the configuration!");
+        let translation_provider = TranslationProvider::get_provider(&config.language)
+            .expect("Language ID does not exist!");
+        let language_list = TranslationProvider::get_language_list();
 
         MoneyzModel {
             file_loader,
@@ -47,14 +53,16 @@ impl Widget for MainWindow {
             today,
             budget_categories,
             monthly_budget,
-            translation_provider: translation_provider::get_provider("fr").expect("Language ID does not exist!"),
+            translation_provider,
+            config,
+            language_list,
         }
     }
 
     fn initialize_budget_categories_headers(&self) {
         use BudgetCategoriesListStoreIds::*;
         let col = gtk::TreeViewColumn::new();
-        col.set_title("Budget category name");
+        col.set_title(&self.model.translation_provider.budget_category_header());
         let cell = gtk::CellRendererText::new();
         cell.set_property_editable(true);
         col.pack_start(&cell, true);
@@ -68,7 +76,7 @@ impl Widget for MainWindow {
         });
 
         let col = gtk::TreeViewColumn::new();
-        col.set_title("Budget amount");
+        col.set_title(&self.model.translation_provider.budget_amount_header());
         let cell = gtk::CellRendererText::new();
         cell.set_property_editable(true);
         col.pack_start(&cell, true);
@@ -82,7 +90,7 @@ impl Widget for MainWindow {
         });
 
         let col = gtk::TreeViewColumn::new();
-        col.set_title("Budget balance");
+        col.set_title(&self.model.translation_provider.budget_balance_header());
         let cell = gtk::CellRendererText::new();
         cell.set_property_editable(false);
         col.pack_start(&cell, true);
@@ -94,7 +102,7 @@ impl Widget for MainWindow {
     fn initialize_spendings_tree_view_headers(&mut self) {
         use SpendingsGtkModelIds::*;
         let col = gtk::TreeViewColumn::new();
-        col.set_title("Name");
+        col.set_title(&self.model.translation_provider.spending_name_header());
         let cell = gtk::CellRendererText::new();
         cell.set_property_editable(true);
         col.pack_start(&cell, true);
@@ -108,7 +116,11 @@ impl Widget for MainWindow {
         });
 
         let col = gtk::TreeViewColumn::new();
-        col.set_title("Category");
+        col.set_title(
+            &self.model
+                .translation_provider
+                .spending_budget_category_header(),
+        );
         let cell = gtk::CellRendererCombo::new();
         let category_model: gtk::ListStore = self
             .model
@@ -135,7 +147,7 @@ impl Widget for MainWindow {
         self.model.spending_category_combox_box = Some(cell);
 
         let col = gtk::TreeViewColumn::new();
-        col.set_title("Amount");
+        col.set_title(&self.model.translation_provider.spending_amount_header());
         let cell = gtk::CellRendererText::new();
         cell.set_property_editable(true);
         col.pack_start(&cell, true);
@@ -149,7 +161,7 @@ impl Widget for MainWindow {
         });
 
         let col = gtk::TreeViewColumn::new();
-        col.set_title("Day");
+        col.set_title(&self.model.translation_provider.spending_day_header());
         let cell = gtk::CellRendererCombo::new();
         let day_model =
             list_model_from_month_year(self.model.selected_month, self.model.selected_year);
@@ -186,6 +198,17 @@ impl Widget for MainWindow {
         self.year_combo_box.add_attribute(&cell, "text", 0);
         self.year_combo_box
             .set_active(Some(self.model.selected_year.0 - FIRST_YEAR));
+    }
+
+    fn initialize_language_combo_box(&self) {
+        let cell = gtk::CellRendererText::new();
+        let language_model = self.create_and_fill_language_model();
+        self.language_combo_box.set_model(Some(&language_model));
+        self.language_combo_box.pack_start(&cell, true);
+        self.language_combo_box.add_attribute(&cell, "text", 1);
+        self.language_combo_box.set_id_column(0);
+        self.language_combo_box
+            .set_active_id(Some(&self.model.config.language));
     }
 
     fn on_budget_amount_changed(&mut self, path: gtk::TreePath, value: String) {
@@ -404,6 +427,20 @@ impl Widget for MainWindow {
             .set_property_model(Some(&tree_model));
     }
 
+    fn on_language_changed(&mut self) {
+        // TODO show dialog box for restart
+        let new_language = if let Some(new_language) = self.language_combo_box.get_active_id() {
+            new_language
+        } else {
+            return;
+        };
+        self.model.config.language = new_language.to_string();
+        self.model
+            .file_loader
+            .save_config(&self.model.config)
+            .expect("Could not save configuration file!");
+    }
+
     fn update(&mut self, event: MoneyzMsg) {
         use MoneyzMsg::*;
         debug!("Update with message: {:?}", event);
@@ -419,6 +456,7 @@ impl Widget for MainWindow {
                 self.on_spending_category_cell_changed(path, value)
             }
             ChangeSelectedDate => self.on_change_selected_date(),
+            LanguageChanged => self.on_language_changed(),
             Quit => gtk::main_quit(),
         }
     }
@@ -443,6 +481,11 @@ impl Widget for MainWindow {
                             changed(_) => MoneyzMsg::ChangeSelectedDate,
                             margin_end: MARGIN_BETWEEN,
                         },
+                        #[name="language_combo_box"]
+                        gtk::ComboBox {
+                            changed(_) => MoneyzMsg::LanguageChanged,
+                            margin_end: MARGIN_BETWEEN,
+                        },
                     },
                     #[name="spendings_tree_view"]
                     gtk::TreeView {
@@ -455,7 +498,7 @@ impl Widget for MainWindow {
                     orientation: Vertical,
                     #[name="monthly_budget_total_label"]
                     gtk::Label {
-                        text: "Balance for this month: "
+                        text: ""
                     },
                     #[name="budget_categories_tree_view"]
                     gtk::TreeView {
@@ -471,6 +514,7 @@ impl Widget for MainWindow {
         self.initialize_budget_categories_headers();
         self.initialize_spendings_tree_view_headers();
         self.initialize_month_year_combo_boxes();
+        self.initialize_language_combo_box();
 
         self.model.monthly_budget = self
             .model
@@ -513,7 +557,7 @@ impl Widget for MainWindow {
         let whole = total;
         let cents = 0;
         self.monthly_budget_total_label
-            .set_text(&format!("Balance for this month: {}", self.model.translation_provider.format_money(whole, cents).unwrap()));
+            .set_text(&self.model.translation_provider.whole_balance(whole, cents).unwrap());
     }
 
     fn update_monthly_budget_moneyz_model_from_gtk_model(&mut self) {
@@ -555,6 +599,14 @@ impl Widget for MainWindow {
         let model = gtk::ListStore::new(&[String::static_type()]);
         for year in FIRST_YEAR..LAST_YEAR {
             model.insert_with_values(None, &[0], &[&year.to_string()]);
+        }
+        model
+    }
+
+    fn create_and_fill_language_model(&self) -> gtk::ListStore {
+        let model = gtk::ListStore::new(&[String::static_type(), String::static_type()]);
+        for (id, display) in &self.model.language_list {
+            model.insert_with_values(None, &[0, 1], &[&id, &display]);
         }
         model
     }
