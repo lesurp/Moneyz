@@ -3,6 +3,7 @@ mod data_to_model;
 mod file_loader;
 mod main_window;
 mod translation_provider;
+mod config;
 
 use relm::Widget;
 
@@ -20,11 +21,14 @@ pub struct MoneyzModel {
     monthly_budget: data::MonthlyBudget,
 
     translation_provider: translation_provider::TranslationProvider,
+    config: config::Config,
+    language_list: Vec<(String, String)>,
 }
 
 #[derive(relm_derive::Msg, Debug)]
 pub enum MoneyzMsg {
     ChangeSelectedDate,
+    LanguageChanged,
     SpendingCategoryCellChanged(gtk::TreePath, String),
     SpendingNameCellChanged(gtk::TreePath, String),
     SpendingAmountCellChanged(gtk::TreePath, String),
@@ -40,5 +44,5 @@ fn main() {
     env_logger::init();
 
     let file_loader = file_loader::FileLoader::new(DATA_DIR);
-    main_window::MainWindow::run(file_loader).expect("Win::run failed");
+    main_window::MainWindow::run(file_loader).expect("MainWindow::run failed");
 }
