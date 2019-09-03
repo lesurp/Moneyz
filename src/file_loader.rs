@@ -1,4 +1,5 @@
 use crate::data::{BudgetCategories, Month, MonthlyBudget, Year};
+use crate::config::Config;
 use serde_json;
 use std::error::Error;
 use std::fs::File;
@@ -6,6 +7,7 @@ use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 
 const BUDGET_CATEGORIES_FILE: &str = "budget_categories.json";
+const CONFIG_FILE: &str = "config.json";
 
 pub struct FileLoader {
     base_dir: PathBuf,
@@ -24,6 +26,12 @@ impl FileLoader {
             base_dir,
             budget_categories_path,
         }
+    }
+
+    pub fn load_config(&self) -> Result<Config, Box<dyn Error>> {
+        let mut config_path = self.base_dir.clone();
+        config_path.push(CONFIG_FILE);
+        FileLoader::load_or_default(config_path)
     }
 
     pub fn load_budget_categories(&self) -> Result<BudgetCategories, Box<dyn Error>> {
@@ -48,6 +56,15 @@ impl FileLoader {
         } else {
             Ok(Default::default())
         }
+    }
+
+    pub fn save_config(
+        &self,
+        config: &Config,
+    ) -> Result<(), Box<dyn Error>> {
+        let mut config_path = self.base_dir.clone();
+        config_path.push(CONFIG_FILE);
+        FileLoader::save(&config_path, config)
     }
 
     pub fn save_budget_categories(
