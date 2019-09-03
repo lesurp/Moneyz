@@ -1,0 +1,29 @@
+{
+    "id": "en_GB",
+    "display": "English",
+
+    "january": "January",
+    "february": "February",
+    "march": "March",
+    "april": "April",
+    "may": "May",
+    "june": "June",
+    "july": "July",
+    "august": "August",
+    "september": "September",
+    "october": "October",
+    "november": "November",
+    "december": "December",
+
+    "budget_category_header": "Budget",
+    "budget_amount_header": "Monthly budget",
+    "budget_balance_header": "Balance",
+
+    "spending_name_header": "Name",
+    "spending_budget_category_header": "Budget category",
+    "spending_amount_header": "Amount",
+    "spending_day_header": "Day",
+
+    "format_money": "£{whole}.{cents}",
+    "whole_balance": "Your monthly balance is: £{whole}.{cents}"
+}

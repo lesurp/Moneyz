@@ -1,0 +1,29 @@
+{
+    "id": "fr_FR",
+    "display": "Français",
+
+    "january": "janvier",
+    "february": "février",
+    "march": "mars",
+    "april": "avril",
+    "may": "mai",
+    "june": "juin",
+    "july": "juillet",
+    "august": "août",
+    "september": "septembre",
+    "october": "octobre",
+    "november": "novembre",
+    "december": "décembre",
+
+    "budget_category_header": "Budget",
+    "budget_amount_header": "Budget mensuel",
+    "budget_balance_header": "Solde",
+
+    "spending_name_header": "Nom",
+    "spending_budget_category_header": "Categorie",
+    "spending_amount_header": "Montant",
+    "spending_day_header": "Date",
+
+    "format_money": "{whole},{cents} €",
+    "whole_balance": "Votre solde mensuel est de: {whole},{cents} €"
+}
