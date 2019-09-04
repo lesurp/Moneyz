@@ -1,10 +1,11 @@
-use crate::data::{BudgetCategory, Day, Month, Year};
+use crate::data::{
+    BudgetAmount, BudgetCategory, BudgetCategoryId, Day, MoneyAmount, Month, Spending, Year,
+};
 use crate::data_to_model::{
-    add_default_budget_category, add_default_spending, amount_to_color,
+    add_default_budget_category, add_default_spending, BudgetCategoryComboBoxIds,
     get_model_from_budget_categories_and_monthly_budget, get_spendings_model,
-    list_model_from_month_year, list_store_to_budget_categories, list_store_to_monthly_budget,
-    order_spendings_by_day, BudgetCategoriesListStoreIds, SpendingsGtkModelIds,
-    BACKGROUND_COLOR_NORMAL,
+    list_model_from_month_year, BudgetCategoriesListStoreIds,
+    SpendingsGtkModelIds,
 };
 use crate::file_loader::FileLoader;
 use crate::translation_provider::TranslationProvider;
@@ -67,7 +68,7 @@ impl Widget for MainWindow {
         cell.set_property_editable(true);
         col.pack_start(&cell, true);
         col.add_attribute(&cell, "text", Name.into());
-        col.add_attribute(&cell, "background", BackgroundColor.into());
+        col.add_attribute(&cell, "background", NameBackgroundColor.into());
         self.budget_categories_tree_view.append_column(&col);
         let relm = self.model.relm.clone();
         cell.connect_edited(move |_, path, value| {
@@ -80,8 +81,9 @@ impl Widget for MainWindow {
         let cell = gtk::CellRendererText::new();
         cell.set_property_editable(true);
         col.pack_start(&cell, true);
+        // TODO: changing the default line's amoutn does not work with this..?
         col.add_attribute(&cell, "text", Amount.into());
-        col.add_attribute(&cell, "background", BackgroundColor.into());
+        col.add_attribute(&cell, "background", AmountBackgroundColor.into());
         self.budget_categories_tree_view.append_column(&col);
         let relm = self.model.relm.clone();
         cell.connect_edited(move |_, path, value| {
@@ -95,7 +97,7 @@ impl Widget for MainWindow {
         cell.set_property_editable(false);
         col.pack_start(&cell, true);
         col.add_attribute(&cell, "text", Balance.into());
-        col.add_attribute(&cell, "background", BalanceCellBackgroundColor.into());
+        col.add_attribute(&cell, "background", BalanceBackgroundColor.into());
         self.budget_categories_tree_view.append_column(&col);
     }
 
@@ -107,7 +109,7 @@ impl Widget for MainWindow {
         cell.set_property_editable(true);
         col.pack_start(&cell, true);
         col.add_attribute(&cell, "text", Name.into());
-        col.add_attribute(&cell, "background", BackgroundColor.into());
+        col.add_attribute(&cell, "background", NameBackgroundColor.into());
         self.spendings_tree_view.append_column(&col);
         let relm = self.model.relm.clone();
         cell.connect_edited(move |_, path, value| {
@@ -133,10 +135,10 @@ impl Widget for MainWindow {
         cell.set_property_model(Some(&tree_model));
         cell.set_property_editable(true);
         cell.set_property_has_entry(false);
-        cell.set_property_text_column(1);
+        cell.set_property_text_column(BudgetCategoryComboBoxIds::Name.into());
         col.pack_start(&cell, true);
         col.add_attribute(&cell, "text", CategoryName.into());
-        col.add_attribute(&cell, "background", BackgroundColor.into());
+        col.add_attribute(&cell, "background", CategoryNameBackgroundColor.into());
         let relm = self.model.relm.clone();
         cell.connect_edited(move |_, path, value| {
             relm.stream().emit(MoneyzMsg::SpendingCategoryCellChanged(
@@ -153,7 +155,7 @@ impl Widget for MainWindow {
         cell.set_property_editable(true);
         col.pack_start(&cell, true);
         col.add_attribute(&cell, "text", Amount.into());
-        col.add_attribute(&cell, "background", AmountCellBackgroundColor.into());
+        col.add_attribute(&cell, "background", AmountBackgroundColor.into());
         self.spendings_tree_view.append_column(&col);
         let relm = self.model.relm.clone();
         cell.connect_edited(move |_, path, value| {
@@ -173,7 +175,7 @@ impl Widget for MainWindow {
         cell.set_property_text_column(0);
         col.pack_start(&cell, true);
         col.add_attribute(&cell, "text", Day.into());
-        col.add_attribute(&cell, "background", BackgroundColor.into());
+        col.add_attribute(&cell, "background", DayBackgroundColor.into());
         let relm = self.model.relm.clone();
         cell.connect_edited(move |_, path, value| {
             relm.stream()
@@ -214,66 +216,123 @@ impl Widget for MainWindow {
 
     fn on_budget_amount_changed(&mut self, path: gtk::TreePath, value: String) {
         debug!("Budget amount modified; new value: {}", value);
-        let amount = if let Ok(amount) = value.parse::<i32>() {
+        let amount = if let Some(amount) =
+            MoneyAmount::from_string(&value, &self.model.translation_provider.decimal_separator())
+        {
             amount
         } else {
             debug!("'{}' could NOT be parsed into an amount", value);
             return;
         };
+        debug!("Parsed amount: {}", amount.to_i32());
 
-        // TODO since all the work is done here we may as well modify directly self.model
-        // and then update the gtk model rather doing gtk -> self -> gtk...
-        let tree_model = self.budget_categories_tree_view.get_model().unwrap();
-        let model = tree_model.downcast::<gtk::ListStore>().unwrap();
-        let iter = model.get_iter(&path).unwrap();
-        model.set_value(&iter, 2, &Value::from(&amount));
-        debug!("Parsed amount: {}", amount);
-        self.update_monthly_budget_moneyz_model_from_gtk_model();
+        let budget_category_row = path.get_indices()[0] as usize;
+        match self
+            .model
+            .budget_categories
+            .0
+            .iter_mut()
+            .nth(budget_category_row)
+        {
+            // we changed the amount for a known budget_category
+            Some((id, _)) => {
+                self.model
+                    .monthly_budget
+                    .budgets
+                    .insert(*id, BudgetAmount(amount.to_i32()));
+            }
+            // we changed the amount for the default budget entry
+            // therefore we have nothing to update after creating it
+            None => {
+                let new_id = self
+                    .model
+                    .budget_categories
+                    .0
+                    .iter_mut()
+                    .last()
+                    .map_or(0, |(id, _)| id.0)
+                    + 1;
+                self.model.budget_categories.0.insert(
+                    BudgetCategoryId(new_id),
+                    BudgetCategory("default new category_name".to_owned()),
+                );
+            }
+        }
+
+        self.model
+            .file_loader
+            .save_monthly_budget(
+                self.model.selected_month,
+                self.model.selected_year,
+                &self.model.monthly_budget,
+            )
+            .unwrap();
+
+        // needed to update the UI - probably much slower than setting the value directly!
         self.update_budget_categories_gtk_model_from_moneyz_model();
     }
 
     fn on_category_name_changed(&mut self, path: gtk::TreePath, value: String) {
-        use BudgetCategoriesListStoreIds::*;
         debug!("Category name has been changed: {}", value);
-        let tree_model = self.budget_categories_tree_view.get_model().unwrap();
-        let model = tree_model.downcast::<gtk::ListStore>().unwrap();
-        let mut does_name_already_exist = false;
-        model.foreach(|m, _, i| {
-            let val = m.get_value(i, Name.into());
-            does_name_already_exist = val.get() == Some(&*value);
-            does_name_already_exist
-        });
-        if does_name_already_exist {
-            debug!("Selected category name already exists!");
-            return;
+        let budget_category_row = path.get_indices()[0] as usize;
+        for (_, name) in &self.model.budget_categories.0 {
+            if name.0 == value {
+                debug!("Selected category name already exists!");
+                return;
+            }
         }
 
-        let iter = model.get_iter(&path).unwrap();
-        model.set_value(&iter, Name as u32, &Value::from(&value));
-        // if the row was the default one, change it to non-default then add another default one
-        if model.get_value(&iter, IsDefault.into()).get().unwrap() {
-            model.set_value(&iter, IsDefault.into(), &Value::from(&false));
-            model.set_value(
-                &iter,
-                BackgroundColor.into(),
-                &Value::from(&BACKGROUND_COLOR_NORMAL),
-            );
-            let max_id = model.get_value(&iter, Id.into()).get::<u32>().unwrap();
-            add_default_budget_category(&model, max_id);
-        }
-        self.update_budget_categories_moneyz_model_from_gtk_model();
+        match &mut self
+            .model
+            .budget_categories
+            .0
+            .iter_mut()
+            .nth(budget_category_row)
+        {
+            // budget_category exists - update it
+            Some((id, name)) => {
+                name.0 = value.clone();
+                for spending in &mut self.model.monthly_budget.spendings.0 {
+                    if spending.budget_category_id.0 == id.0 {
+                        spending.budget_category_name = BudgetCategory(value.to_string());
+                    }
+                }
+            }
+            // budget_category does NOT exist - we modified the default entry and have to create
+            // and new budget_category
+            None => {
+                let new_id = self
+                    .model
+                    .budget_categories
+                    .0
+                    .iter_mut()
+                    .last()
+                    .map_or(0, |(id, _)| id.0 + 1);
 
-        // because the name of a category has changed, we want to also update the displayed name in the spendings list
-        // to do that, we recreate the ListModel using the new budget categories and the old monthly_budget,
-        // then we create the new monthly_budget from the model. A bit awkward, needs some refactoring..?
-        self.spendings_tree_view
-            .set_model(Some(&get_spendings_model(
+                self.model
+                    .budget_categories
+                    .0
+                    .insert(BudgetCategoryId(new_id), BudgetCategory(value.clone()));
+            }
+        }
+
+        // save the model
+        self.model
+            .file_loader
+            .save_budget_categories(&self.model.budget_categories)
+            .unwrap();
+        self.model
+            .file_loader
+            .save_monthly_budget(
+                self.model.selected_month,
+                self.model.selected_year,
                 &self.model.monthly_budget,
-                &self.model.budget_categories,
-                self.model.today,
-            )));
-        self.update_monthly_budget_moneyz_model_from_gtk_model();
+            )
+            .unwrap();
 
+        // update the gtk model
+        self.update_budget_categories_gtk_model_from_moneyz_model();
+        self.update_monthly_budget_gtk_model_from_moneyz_model();
         let category_model: gtk::ListStore = (&self.model.budget_categories).into();
         let tree_model = category_model.upcast::<gtk::TreeModel>();
         self.model
@@ -284,7 +343,6 @@ impl Widget for MainWindow {
     }
 
     fn on_spending_amount_cell_changed(&mut self, path: gtk::TreePath, value: String) {
-        use SpendingsGtkModelIds::*;
         debug!("Amount cell modified; new value: {}", value);
         let amount = if let Ok(amount) = value.parse::<i32>() {
             amount
@@ -292,100 +350,178 @@ impl Widget for MainWindow {
             debug!("'{}' could NOT be parsed into an amount", value);
             return;
         };
-
-        let tree_model = self.spendings_tree_view.get_model().unwrap();
-        let model = tree_model.downcast::<gtk::ListStore>().unwrap();
-        let iter = model.get_iter(&path).unwrap();
-        model.set_value(&iter, Amount.into(), &Value::from(&amount));
-        model.set_value(
-            &iter,
-            AmountCellBackgroundColor.into(),
-            &Value::from(&amount_to_color(amount)),
-        );
-        if model.get_value(&iter, IsDefault.into()).get().unwrap() {
-            model.set_value(
-                &iter,
-                BackgroundColor.into(),
-                &Value::from(&BACKGROUND_COLOR_NORMAL),
-            );
-            model.set_value(&iter, IsDefault.into(), &Value::from(&false));
-            add_default_spending(&model, self.model.today);
-        }
         debug!("Parsed amount: {}", amount);
-        self.update_monthly_budget_moneyz_model_from_gtk_model();
+
+        let spending_category_row = path.get_indices()[0] as usize;
+        match &mut self
+            .model
+            .monthly_budget
+            .spendings
+            .0
+            .iter_mut()
+            .nth(spending_category_row)
+        {
+            // spending - update it
+            Some(spending) => {
+                spending.amount = amount;
+            }
+            // spending does NOT exist - we modified the default entry and have to create
+            // and new one
+            None => {
+                // TODO: use translation_provider
+                let name = "Default spending name".to_owned();
+                let budget_category_id = BudgetCategoryId(u32::max_value());
+                let budget_category_name =
+                    BudgetCategory("default budget_category_name".to_owned());
+                let day = self.model.today;
+
+                self.model.monthly_budget.spendings.0.push(Spending {
+                    name,
+                    budget_category_id,
+                    budget_category_name,
+                    amount,
+                    day,
+                });
+            }
+        }
+
+        self.model
+            .file_loader
+            .save_monthly_budget(
+                self.model.selected_month,
+                self.model.selected_year,
+                &self.model.monthly_budget,
+            )
+            .unwrap();
+
         self.update_budget_categories_gtk_model_from_moneyz_model();
         self.update_monthly_total_label_from_moneyz_model();
+        self.update_monthly_budget_gtk_model_from_moneyz_model();
     }
 
     fn on_spending_name_cell_changed(&mut self, path: gtk::TreePath, value: String) {
-        use SpendingsGtkModelIds::*;
         debug!("Spending name has been updated; new value: {}", value);
-        let tree_model = self.spendings_tree_view.get_model().unwrap();
-        let model = tree_model.downcast::<gtk::ListStore>().unwrap();
-        let iter = model.get_iter(&path).unwrap();
-        model.set_value(&iter, Name.into(), &Value::from(&value));
-        model.set_value(
-            &iter,
-            BackgroundColor.into(),
-            &Value::from(&BACKGROUND_COLOR_NORMAL),
-        );
-        if model.get_value(&iter, IsDefault.into()).get().unwrap() {
-            model.set_value(&iter, IsDefault.into(), &Value::from(&false));
-            add_default_spending(&model, self.model.today);
+
+        let spending_category_row = path.get_indices()[0] as usize;
+        match &mut self
+            .model
+            .monthly_budget
+            .spendings
+            .0
+            .iter_mut()
+            .nth(spending_category_row)
+        {
+            // spending exists - update it
+            Some(spending) => {
+                spending.name = value;
+            }
+            // spending does NOT exist - we modified the default entry and have to create
+            // and new one
+            None => {
+                // TODO: use translation_provider
+                let budget_category_id = BudgetCategoryId(u32::max_value());
+                let budget_category_name =
+                    BudgetCategory("default budget_category_name".to_owned());
+                let day = self.model.today;
+                let amount = 0;
+
+                self.model.monthly_budget.spendings.0.push(Spending {
+                    name: value,
+                    budget_category_id,
+                    budget_category_name,
+                    amount,
+                    day,
+                });
+            }
         }
-        self.update_monthly_budget_moneyz_model_from_gtk_model();
+        self.update_monthly_budget_gtk_model_from_moneyz_model();
     }
 
     fn on_spending_day_cell_changed(&mut self, path: gtk::TreePath, value: String) {
-        use SpendingsGtkModelIds::*;
         debug!("Day cell modified; new value: {}", value);
-        let day = value.parse::<i32>().unwrap();
+        let day = Day(value.parse::<i32>().unwrap());
 
-        debug!("Parsed amount: {}", day);
-        let tree_model = self.spendings_tree_view.get_model().unwrap();
-        let model = tree_model.downcast::<gtk::ListStore>().unwrap();
-        let iter = model.get_iter(&path).unwrap();
-        model.set_value(&iter, Day.into(), &Value::from(&day));
-        model.set_value(
-            &iter,
-            BackgroundColor.into(),
-            &Value::from(&BACKGROUND_COLOR_NORMAL),
-        );
-        if model.get_value(&iter, IsDefault.into()).get().unwrap() {
-            model.set_value(&iter, IsDefault.into(), &Value::from(&false));
-            order_spendings_by_day(&model);
-            add_default_spending(&model, self.model.today);
+        debug!("Parsed day: {}", day.0);
+        let spending_category_row = path.get_indices()[0] as usize;
+        match &mut self
+            .model
+            .monthly_budget
+            .spendings
+            .0
+            .iter_mut()
+            .nth(spending_category_row)
+        {
+            // spending exists - update it
+            Some(spending) => {
+                spending.day = day;
+            }
+            // spending does NOT exist - we modified the default entry and have to create
+            // and new one
+            None => {
+                // TODO: use translation_provider
+                let budget_category_id = BudgetCategoryId(u32::max_value());
+                let budget_category_name =
+                    BudgetCategory("default budget_category_name".to_owned());
+                let name = "default_spending_name".to_owned();
+                let amount = 0;
+
+                self.model.monthly_budget.spendings.0.push(Spending {
+                    name,
+                    budget_category_id,
+                    budget_category_name,
+                    amount,
+                    day,
+                });
+            }
         }
-
-        self.update_monthly_budget_moneyz_model_from_gtk_model();
+        self.update_monthly_budget_gtk_model_from_moneyz_model();
     }
 
     fn on_spending_category_cell_changed(&mut self, path: gtk::TreePath, value: String) {
-        use SpendingsGtkModelIds::*;
+        // TODO refacto this
         let id = (|| {
-            for BudgetCategory(id, name) in &self.model.budget_categories.0 {
-                if name == &value {
+            for (id, name) in &self.model.budget_categories.0 {
+                if name.0 == value {
                     return id;
                 }
             }
             panic!("How come the ID wasn't in the budget_categories?");
-        })();
+        })()
+        .clone();
 
-        let tree_model = self.spendings_tree_view.get_model().unwrap();
-        let model = tree_model.downcast::<gtk::ListStore>().unwrap();
-        let iter = model.get_iter(&path).unwrap();
-        model.set_value(&iter, CategoryId.into(), &Value::from(&id.0));
-        model.set_value(&iter, CategoryName.into(), &Value::from(&value));
-        model.set_value(
-            &iter,
-            BackgroundColor.into(),
-            &Value::from(&BACKGROUND_COLOR_NORMAL),
-        );
-        if model.get_value(&iter, IsDefault.into()).get().unwrap() {
-            model.set_value(&iter, IsDefault.into(), &Value::from(&false));
-            add_default_spending(&model, self.model.today);
+        let spending_category_row = path.get_indices()[0] as usize;
+        match &mut self
+            .model
+            .monthly_budget
+            .spendings
+            .0
+            .iter_mut()
+            .nth(spending_category_row)
+        {
+            // spending exists - update it
+            Some(spending) => {
+                spending.budget_category_id = id;
+            }
+            // spending does NOT exist - we modified the default entry and have to create
+            // and new one
+            None => {
+                // TODO: use translation_provider
+                let budget_category_name =
+                    BudgetCategory("default budget_category_name".to_owned());
+                let name = "default_spending_name".to_owned();
+                let amount = 0;
+                let day = self.model.today;
+
+                self.model.monthly_budget.spendings.0.push(Spending {
+                    name,
+                    budget_category_id: id,
+                    budget_category_name,
+                    amount,
+                    day,
+                });
+            }
         }
-        self.update_monthly_budget_moneyz_model_from_gtk_model();
+        self.update_monthly_budget_gtk_model_from_moneyz_model();
         self.update_budget_categories_gtk_model_from_moneyz_model();
     }
 
@@ -417,7 +553,6 @@ impl Widget for MainWindow {
         self.update_budget_categories_gtk_model_from_moneyz_model();
         self.update_monthly_budget_gtk_model_from_moneyz_model();
         self.update_monthly_total_label_from_moneyz_model();
-
         let day_model =
             list_model_from_month_year(self.model.selected_month, self.model.selected_year);
         let tree_model = day_model.upcast::<gtk::TreeModel>();
@@ -426,6 +561,9 @@ impl Widget for MainWindow {
             .as_ref()
             .unwrap()
             .set_property_model(Some(&tree_model));
+
+        // to add new entries, we add a "default" line to the gtk model
+        // it does NOT exist in the actual model
     }
 
     fn on_language_changed(&mut self) {
@@ -436,15 +574,17 @@ impl Widget for MainWindow {
         };
         // since the callback is called on startup (when we initialize the selected language),
         // we need this check
-        if new_language == self.model.config.language { return; }
+        if new_language == self.model.config.language {
+            return;
+        }
         self.model.config.language = new_language;
         self.model
             .file_loader
             .save_config(&self.model.config)
             .expect("Could not save configuration file!");
 
-        let new_language_provider =
-            TranslationProvider::get_provider(&self.model.config.language).expect("Language ID does not exist!");
+        let new_language_provider = TranslationProvider::get_provider(&self.model.config.language)
+            .expect("Language ID does not exist!");
         let message_dialog_text = new_language_provider.restart_required_info()
             + "\n\n"
             + &self.model.translation_provider.restart_required_info();
@@ -536,33 +676,33 @@ impl Widget for MainWindow {
         self.initialize_month_year_combo_boxes();
         self.initialize_language_combo_box();
 
-        self.model.monthly_budget = self
-            .model
-            .file_loader
-            .load_monthly_budget(self.model.selected_month, self.model.selected_year)
-            .unwrap();
+        // everything else is gonna be loaded bby the "on_change_selected_date" event
         self.model.budget_categories = self.model.file_loader.load_budget_categories().unwrap();
-
-        self.update_budget_categories_gtk_model_from_moneyz_model();
-        self.update_monthly_budget_gtk_model_from_moneyz_model();
     }
 
     fn update_monthly_budget_gtk_model_from_moneyz_model(&mut self) {
         let spendings_model = get_spendings_model(
             &self.model.monthly_budget,
             &self.model.budget_categories,
-            self.model.today,
+            &self.model.translation_provider,
         );
         self.spendings_tree_view.set_model(Some(&spendings_model));
+        let tree_model = self.spendings_tree_view.get_model().unwrap();
+        let model = tree_model.downcast::<gtk::ListStore>().unwrap();
+        add_default_spending(&model, self.model.today);
     }
 
     fn update_budget_categories_gtk_model_from_moneyz_model(&mut self) {
         let budget_categories_model = get_model_from_budget_categories_and_monthly_budget(
             &self.model.budget_categories,
             &self.model.monthly_budget,
+            &self.model.translation_provider,
         );
         self.budget_categories_tree_view
             .set_model(Some(&budget_categories_model));
+        let tree_model = self.budget_categories_tree_view.get_model().unwrap();
+        let model = tree_model.downcast::<gtk::ListStore>().unwrap();
+        add_default_budget_category(&model);
     }
 
     fn update_monthly_total_label_from_moneyz_model(&mut self) {
@@ -574,41 +714,18 @@ impl Widget for MainWindow {
             .iter()
             .fold(0, |total, spending| total + spending.amount);
         // TODO: gotta store the amount in cents!
-        let whole = total;
-        let cents = 0;
+        let money_amount = MoneyAmount::from_i32(total);
         self.monthly_budget_total_label.set_text(
             &self
                 .model
                 .translation_provider
-                .whole_balance(whole, cents)
+                .whole_balance(
+                    money_amount.sign(),
+                    money_amount.whole(),
+                    money_amount.cents_padded(),
+                )
                 .unwrap(),
         );
-    }
-
-    fn update_monthly_budget_moneyz_model_from_gtk_model(&mut self) {
-        self.model.monthly_budget = list_store_to_monthly_budget(
-            self.spendings_tree_view.get_model().unwrap(),
-            self.budget_categories_tree_view.get_model().unwrap(),
-        );
-
-        self.model
-            .file_loader
-            .save_monthly_budget(
-                self.model.selected_month,
-                self.model.selected_year,
-                &self.model.monthly_budget,
-            )
-            .unwrap();
-    }
-
-    fn update_budget_categories_moneyz_model_from_gtk_model(&mut self) {
-        self.model.budget_categories =
-            list_store_to_budget_categories(self.budget_categories_tree_view.get_model().unwrap());
-
-        self.model
-            .file_loader
-            .save_budget_categories(&self.model.budget_categories)
-            .unwrap();
     }
 
     fn create_and_fill_month_model(&self) -> gtk::ListStore {

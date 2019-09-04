@@ -1,4 +1,5 @@
 use crate::data::*;
+use crate::translation_provider::TranslationProvider;
 use gtk::{GtkListStoreExtManual, StaticType, TreeModelExt};
 use log::debug;
 
@@ -27,8 +28,7 @@ impl Into<u32> for SpendingDayComboBoxIds {
 }
 
 pub enum BudgetCategoryComboBoxIds {
-    Id = 0,
-    Name = 1,
+    Name = 0,
 }
 
 impl Into<i32> for BudgetCategoryComboBoxIds {
@@ -44,13 +44,12 @@ impl Into<u32> for BudgetCategoryComboBoxIds {
 }
 
 pub enum BudgetCategoriesListStoreIds {
-    Id = 0,
-    Name = 1,
-    Amount = 2,
-    Balance = 3,
-    IsDefault = 4,
-    BackgroundColor = 5,
-    BalanceCellBackgroundColor = 6,
+    Name = 0,
+    Amount = 1,
+    Balance = 2,
+    NameBackgroundColor = 3,
+    AmountBackgroundColor = 4,
+    BalanceBackgroundColor = 5,
 }
 
 impl Into<i32> for BudgetCategoriesListStoreIds {
@@ -67,13 +66,14 @@ impl Into<u32> for BudgetCategoriesListStoreIds {
 
 pub enum SpendingsGtkModelIds {
     Name = 0,
-    CategoryId = 1,
-    CategoryName = 2,
-    Amount = 3,
-    Day = 4,
-    BackgroundColor = 5,
-    IsDefault = 6,
-    AmountCellBackgroundColor = 7,
+    CategoryName = 1,
+    Amount = 2,
+    Day = 3,
+
+    NameBackgroundColor = 4,
+    CategoryNameBackgroundColor = 5,
+    AmountBackgroundColor = 6,
+    DayBackgroundColor = 7,
 }
 
 impl Into<i32> for SpendingsGtkModelIds {
@@ -91,16 +91,22 @@ impl Into<u32> for SpendingsGtkModelIds {
 pub fn get_model_from_budget_categories_and_monthly_budget(
     budget_categories: &BudgetCategories,
     monthly_budget: &MonthlyBudget,
+    translation_provider: &TranslationProvider,
 ) -> gtk::ListStore {
     use BudgetCategoriesListStoreIds::*;
 
     let list = gtk::ListStore::new(&[
-        u32::static_type(),
+        // name
         String::static_type(),
-        i32::static_type(),
-        i32::static_type(),
-        bool::static_type(),
+        // amount
         String::static_type(),
+        // balance
+        String::static_type(),
+        // name color
+        String::static_type(),
+        // amount color
+        String::static_type(),
+        // balance color
         String::static_type(),
     ]);
 
@@ -108,51 +114,47 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
     let mut balance_per_budget = std::collections::HashMap::new();
     for spending in &monthly_budget.spendings.0 {
         *balance_per_budget
-            .entry(&spending.budget_category)
+            .entry(spending.budget_category_id)
             .or_insert(0) += spending.amount;
     }
 
-    for budget_category in &budget_categories.0 {
+    for (budget_category_id, budget_category) in &budget_categories.0 {
         let budget_category_amount = monthly_budget
             .budgets
-            .get(&budget_category.id())
+            .get(&budget_category_id)
             .unwrap_or(&BudgetAmount(0));
-        let balance_cell_color = amount_to_color(
-            budget_category_amount.0 + balance_per_budget.get(&budget_category).unwrap_or(&0),
-        );
+        let amount = MoneyAmount::from_i32(budget_category_amount.0);
+        let formatted_amount = translation_provider
+            .format_money(amount.sign(), amount.whole(), amount.cents_padded())
+            .expect("Could not format the input in the budget_category_amount fn!");
+
+        let balance =
+            budget_category_amount.0 + balance_per_budget.get(&budget_category_id).unwrap_or(&0);
+        let formatted_balance = translation_provider
+            .format_money(amount.sign(), amount.whole(), amount.cents_padded())
+            .expect("Could not format the input in the budget_category_amount fn!");
+        let balance_cell_color = amount_to_color(balance);
+
         list.insert_with_values(
             None,
             &[
-                Id.into(),
                 Name.into(),
                 Amount.into(),
                 Balance.into(),
-                IsDefault.into(),
-                BackgroundColor.into(),
-                BalanceCellBackgroundColor.into(),
+                NameBackgroundColor.into(),
+                AmountBackgroundColor.into(),
+                BalanceBackgroundColor.into(),
             ],
             &[
-                &budget_category.id().0,
-                &budget_category.name(),
-                &budget_category_amount.0,
-                &(budget_category_amount.0
-                    + balance_per_budget.get(&budget_category).unwrap_or(&0)),
-                &false,
+                &budget_category.0,
+                &formatted_amount,
+                &formatted_balance,
+                &BACKGROUND_COLOR_NORMAL,
                 &BACKGROUND_COLOR_NORMAL,
                 &balance_cell_color,
             ],
         );
     }
-
-    // get the maximum id and increments it by one, or initialize first id at 0
-    let max_category_id = budget_categories
-        .0
-        .iter()
-        .last()
-        .map(|max_category_id| max_category_id.id().0)
-        .unwrap_or(0);
-
-    add_default_budget_category(&list, max_category_id);
     list
 }
 
@@ -165,13 +167,9 @@ impl Into<gtk::ListStore> for BudgetCategories {
 impl Into<gtk::ListStore> for &BudgetCategories {
     fn into(self) -> gtk::ListStore {
         use BudgetCategoryComboBoxIds::*;
-        let list = gtk::ListStore::new(&[u32::static_type(), String::static_type()]);
-        for budget_category in &self.0 {
-            list.insert_with_values(
-                None,
-                &[Id.into(), Name.into()],
-                &[&budget_category.id().0, &budget_category.name()],
-            );
+        let list = gtk::ListStore::new(&[String::static_type()]);
+        for (_, name) in &self.0 {
+            list.insert_with_values(None, &[Name.into()], &[&name.0]);
         }
         list
     }
@@ -180,154 +178,88 @@ impl Into<gtk::ListStore> for &BudgetCategories {
 pub fn get_spendings_model(
     monthly_budget: &MonthlyBudget,
     budget_categories: &BudgetCategories,
-    today: Day,
+    translation_provider: &TranslationProvider,
 ) -> gtk::ListStore {
     use SpendingsGtkModelIds::*;
     let spendings_list = gtk::ListStore::new(&[
         // name
         String::static_type(),
-        // category id
-        u32::static_type(),
         // category display string
         String::static_type(),
         // amount
-        i32::static_type(),
+        String::static_type(),
         // day
         i32::static_type(),
-        // background color (when category doesn't exist anymore)
+        // background
         String::static_type(),
-        // is_default
-        bool::static_type(),
-        // background color (if money in or out)
+        // background
+        String::static_type(),
+        // background
+        String::static_type(),
+        // background
         String::static_type(),
     ]);
 
     for spending in &monthly_budget.spendings.0 {
         let (category_color, category_name) =
-            match budget_categories.0.get(&spending.budget_category) {
-                Some(budget_category) => {
-                    if budget_category.name() == spending.budget_category.name() {
+            match budget_categories.0.get(&spending.budget_category_id) {
+                Some(name) => {
+                    if name.0 == spending.budget_category_name.0 {
                         // Id and display string are the same - nothing special
-                        (BACKGROUND_COLOR_NORMAL, spending.budget_category.name())
+                        (
+                            BACKGROUND_COLOR_NORMAL,
+                            spending.budget_category_name.clone(),
+                        )
                     } else {
                         debug!(
                             "Id exists but names re different. Old name: {}",
-                            spending.budget_category.name()
+                            spending.budget_category_name.0
                         );
-                        debug!("New name: {}", budget_category.name());
+                        debug!("New name: {}", name.0);
                         // The id exists, but the category has been renamed - display the new one with a green background
-                        (
-                            BACKGROUND_COLOR_RENAMED_BUDGET_CATEGORY,
-                            budget_category.name(),
-                        )
+                        (BACKGROUND_COLOR_RENAMED_BUDGET_CATEGORY, name.clone())
                     }
                 }
                 // Id doesn't exist - the category has been deleted
                 // We still show it, with a redbackground
                 None => (
                     BACKGROUND_COLOR_WRONG_BUDGET_CATEGORY,
-                    spending.budget_category.name(),
+                    spending.budget_category_name.clone(),
                 ),
             };
 
         let amount_cell_background_color = amount_to_color(spending.amount);
+        let amount = MoneyAmount::from_i32(spending.amount);
+        let formatted_amount = translation_provider
+            .format_money(amount.sign(), amount.whole(), amount.cents_padded())
+            .expect("Could not format the input in the budget_category_amount fn!");
 
         spendings_list.insert_with_values(
             None,
             &[
                 Name.into(),
-                CategoryId.into(),
                 CategoryName.into(),
                 Amount.into(),
                 Day.into(),
-                BackgroundColor.into(),
-                IsDefault.into(),
-                AmountCellBackgroundColor.into(),
+                NameBackgroundColor.into(),
+                CategoryNameBackgroundColor.into(),
+                AmountBackgroundColor.into(),
+                DayBackgroundColor.into(),
             ],
             &[
                 &spending.name,
-                &spending.budget_category.id().0,
-                &category_name,
-                &spending.amount,
+                &category_name.0,
+                &formatted_amount,
                 &spending.day.0,
+                &BACKGROUND_COLOR_NORMAL,
                 &category_color,
-                &false,
                 &amount_cell_background_color,
+                &BACKGROUND_COLOR_NORMAL,
             ],
         );
     }
     order_spendings_by_day(&spendings_list);
-    add_default_spending(&spendings_list, today);
     spendings_list
-}
-
-pub fn list_store_to_budget_categories(model: gtk::TreeModel) -> BudgetCategories {
-    use BudgetCategoriesListStoreIds::*;
-    let mut budget_categories = BudgetCategories::default();
-    model.foreach(|m, _, i| {
-        if m.get_value(i, IsDefault.into()).get().unwrap() {
-            return false;
-        }
-
-        let id = m.get_value(i, Id.into()).get().unwrap();
-        let name = m.get_value(i, Name.into()).get().unwrap();
-        budget_categories
-            .0
-            .insert(BudgetCategory(BudgetCategoryId(id), name));
-        // false = continue; true = break
-        false
-    });
-
-    budget_categories
-}
-
-pub fn list_store_to_monthly_budget(
-    spendings_model: gtk::TreeModel,
-    budget_categories_model: gtk::TreeModel,
-) -> MonthlyBudget {
-    let mut spendings = Spendings(Vec::new());
-    {
-        use SpendingsGtkModelIds::*;
-        spendings_model.foreach(|m, _, i| {
-            if m.get_value(i, IsDefault.into()).get().unwrap() {
-                return false;
-            }
-            let name = m.get_value(i, Name.into()).get().unwrap();
-            let category_id = m.get_value(i, CategoryId.into()).get().unwrap();
-            let category_name = m.get_value(i, CategoryName.into()).get().unwrap();
-            let amount = m.get_value(i, Amount.into()).get().unwrap();
-            let day = crate::data::Day(m.get_value(i, Day.into()).get().unwrap());
-
-            spendings.0.push(Spending {
-                name,
-                budget_category: BudgetCategory(BudgetCategoryId(category_id), category_name),
-                amount,
-                day,
-            });
-
-            // false = continue; true = break
-            false
-        });
-    }
-
-    let mut budgets = std::collections::HashMap::new();
-    {
-        use BudgetCategoriesListStoreIds::*;
-        budget_categories_model.foreach(|m, _, i| {
-            if m.get_value(i, IsDefault.into()).get().unwrap() {
-                return false;
-            }
-            let id = m.get_value(i, Id.into()).get().unwrap();
-            let amount = m.get_value(i, Amount.into()).get().unwrap();
-
-            budgets.insert(BudgetCategoryId(id), BudgetAmount(amount));
-
-            // false = continue; true = break
-            false
-        });
-    }
-
-    MonthlyBudget { budgets, spendings }
 }
 
 pub fn list_model_from_month_year(m: Month, y: Year) -> gtk::ListStore {
@@ -365,48 +297,46 @@ pub fn add_default_spending(model: &gtk::ListStore, today: Day) {
         None,
         &[
             Name.into(),
-            CategoryId.into(),
             CategoryName.into(),
             Amount.into(),
             Day.into(),
-            BackgroundColor.into(),
-            IsDefault.into(),
-            AmountCellBackgroundColor.into(),
+            NameBackgroundColor.into(),
+            CategoryNameBackgroundColor.into(),
+            AmountBackgroundColor.into(),
+            DayBackgroundColor.into(),
         ],
         &[
             &"New spending",
             // TODO: see comment on the Spendings declaration on why we do that
             // note: using an option would be better...
-            &u32::max_value(),
             &"",
-            &0,
+            &"0",
             &today.0,
             &BACKGROUND_COLOR_IS_DEFAULT,
-            &true,
+            &BACKGROUND_COLOR_IS_DEFAULT,
+            &BACKGROUND_COLOR_IS_DEFAULT,
             &BACKGROUND_COLOR_IS_DEFAULT,
         ],
     );
 }
 
-pub fn add_default_budget_category(model: &gtk::ListStore, max_id: u32) {
+pub fn add_default_budget_category(model: &gtk::ListStore) {
     use BudgetCategoriesListStoreIds::*;
     model.insert_with_values(
         None,
         &[
-            Id.into(),
             Name.into(),
             Amount.into(),
             Balance.into(),
-            IsDefault.into(),
-            BackgroundColor.into(),
-            BalanceCellBackgroundColor.into(),
+            NameBackgroundColor.into(),
+            AmountBackgroundColor.into(),
+            BalanceBackgroundColor.into(),
         ],
         &[
-            &(max_id + 1),
             &"New category",
-            &0,
-            &0,
-            &true,
+            &"",
+            &"",
+            &BACKGROUND_COLOR_IS_DEFAULT,
             &BACKGROUND_COLOR_IS_DEFAULT,
             &BACKGROUND_COLOR_IS_DEFAULT,
         ],
