@@ -2,9 +2,9 @@ use crate::data::{
     BudgetAmount, BudgetCategory, BudgetCategoryId, Day, MoneyAmount, Month, Spending, Year,
 };
 use crate::data_to_model::{
-    add_default_budget_category, add_default_spending, BudgetCategoryComboBoxIds,
+    add_default_budget_category, add_default_spending,
     get_model_from_budget_categories_and_monthly_budget, get_spendings_model,
-    list_model_from_month_year, BudgetCategoriesListStoreIds,
+    list_model_from_month_year, BudgetCategoriesListStoreIds, BudgetCategoryComboBoxIds,
     SpendingsGtkModelIds,
 };
 use crate::file_loader::FileLoader;
@@ -275,8 +275,8 @@ impl Widget for MainWindow {
     fn on_category_name_changed(&mut self, path: gtk::TreePath, value: String) {
         debug!("Category name has been changed: {}", value);
         let budget_category_row = path.get_indices()[0] as usize;
-        for (_, name) in &self.model.budget_categories.0 {
-            if name.0 == value {
+        for budget_category in self.model.budget_categories.0.values() {
+            if budget_category.0 == value {
                 debug!("Selected category name already exists!");
                 return;
             }
@@ -360,8 +360,7 @@ impl Widget for MainWindow {
             .monthly_budget
             .spendings
             .0
-            .iter_mut()
-            .nth(spending_category_row)
+            .get_mut(spending_category_row)
         {
             // spending - update it
             Some(spending) => {
@@ -410,8 +409,7 @@ impl Widget for MainWindow {
             .monthly_budget
             .spendings
             .0
-            .iter_mut()
-            .nth(spending_category_row)
+            .get_mut(spending_category_row)
         {
             // spending exists - update it
             Some(spending) => {
@@ -450,8 +448,7 @@ impl Widget for MainWindow {
             .monthly_budget
             .spendings
             .0
-            .iter_mut()
-            .nth(spending_category_row)
+            .get_mut(spending_category_row)
         {
             // spending exists - update it
             Some(spending) => {
@@ -480,16 +477,14 @@ impl Widget for MainWindow {
     }
 
     fn on_spending_category_cell_changed(&mut self, path: gtk::TreePath, value: String) {
-        // TODO refacto this
-        let id = (|| {
-            for (id, name) in &self.model.budget_categories.0 {
-                if name.0 == value {
-                    return id;
-                }
-            }
-            panic!("How come the ID wasn't in the budget_categories?");
-        })()
-        .clone();
+        let id = self
+            .model
+            .budget_categories
+            .0
+            .iter()
+            .find(|(_, name)| name.0 == value)
+            .map(|(id, _)| id)
+            .expect("How come the ID wasn't in the budget_categories?");
 
         let spending_category_row = path.get_indices()[0] as usize;
         match &mut self
@@ -497,12 +492,11 @@ impl Widget for MainWindow {
             .monthly_budget
             .spendings
             .0
-            .iter_mut()
-            .nth(spending_category_row)
+            .get_mut(spending_category_row)
         {
             // spending exists - update it
             Some(spending) => {
-                spending.budget_category_id = id;
+                spending.budget_category_id = *id;
             }
             // spending does NOT exist - we modified the default entry and have to create
             // and new one
@@ -516,7 +510,7 @@ impl Widget for MainWindow {
 
                 self.model.monthly_budget.spendings.0.push(Spending {
                     name,
-                    budget_category_id: id,
+                    budget_category_id: *id,
                     budget_category_name,
                     amount,
                     day,

@@ -173,8 +173,8 @@ impl Into<gtk::ListStore> for &BudgetCategories {
     fn into(self) -> gtk::ListStore {
         use BudgetCategoryComboBoxIds::*;
         let list = gtk::ListStore::new(&[String::static_type()]);
-        for (_, name) in &self.0 {
-            list.insert_with_values(None, &[Name.into()], &[&name.0]);
+        for budget_category in self.0.values() {
+            list.insert_with_values(None, &[Name.into()], &[&budget_category.0]);
         }
         list
     }
