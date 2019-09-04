@@ -15,6 +15,8 @@
     "november": "November",
     "december": "December",
 
+    "restart_required_info": "Please restart the program to update the displayed language",
+
     "budget_category_header": "Budget",
     "budget_amount_header": "Monthly budget",
     "budget_balance_header": "Balance",

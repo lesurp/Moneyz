@@ -15,6 +15,8 @@
     "november": "novembre",
     "december": "décembre",
 
+    "restart_required_info": "Veuillez redémarrer le prorgamme pour mettre à jour la langue de l'interface",
+
     "budget_category_header": "Budget",
     "budget_amount_header": "Budget mensuel",
     "budget_balance_header": "Solde",

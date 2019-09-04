@@ -21,6 +21,8 @@ generate_translation! {
     november,
     december,
 
+    restart_required_info,
+
     budget_category_header,
     budget_amount_header,
     budget_balance_header,

@@ -117,7 +117,8 @@ impl Widget for MainWindow {
 
         let col = gtk::TreeViewColumn::new();
         col.set_title(
-            &self.model
+            &self
+                .model
                 .translation_provider
                 .spending_budget_category_header(),
         );
@@ -428,17 +429,36 @@ impl Widget for MainWindow {
     }
 
     fn on_language_changed(&mut self) {
-        // TODO show dialog box for restart
         let new_language = if let Some(new_language) = self.language_combo_box.get_active_id() {
-            new_language
+            new_language.to_string()
         } else {
             return;
         };
-        self.model.config.language = new_language.to_string();
+        // since the callback is called on startup (when we initialize the selected language),
+        // we need this check
+        if new_language == self.model.config.language { return; }
+        self.model.config.language = new_language;
         self.model
             .file_loader
             .save_config(&self.model.config)
             .expect("Could not save configuration file!");
+
+        let new_language_provider =
+            TranslationProvider::get_provider(&self.model.config.language).expect("Language ID does not exist!");
+        let message_dialog_text = new_language_provider.restart_required_info()
+            + "\n\n"
+            + &self.model.translation_provider.restart_required_info();
+        let mut flags = gtk::DialogFlags::MODAL;
+        flags.insert(gtk::DialogFlags::DESTROY_WITH_PARENT);
+        let message_dialog = gtk::MessageDialog::new(
+            Some(&self.root()),
+            flags,
+            gtk::MessageType::Info,
+            gtk::ButtonsType::Close,
+            &message_dialog_text,
+        );
+        message_dialog.run();
+        message_dialog.emit_close();
     }
 
     fn update(&mut self, event: MoneyzMsg) {
@@ -556,8 +576,13 @@ impl Widget for MainWindow {
         // TODO: gotta store the amount in cents!
         let whole = total;
         let cents = 0;
-        self.monthly_budget_total_label
-            .set_text(&self.model.translation_provider.whole_balance(whole, cents).unwrap());
+        self.monthly_budget_total_label.set_text(
+            &self
+                .model
+                .translation_provider
+                .whole_balance(whole, cents)
+                .unwrap(),
+        );
     }
 
     fn update_monthly_budget_moneyz_model_from_gtk_model(&mut self) {
