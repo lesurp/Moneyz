@@ -32,8 +32,11 @@ generate_translation! {
     spending_amount_header,
     spending_day_header,
 
-    format_money(whole: i32, cents: i32),
-    whole_balance(whole: i32, cents: i32),
+    decimal_separator,
+    thousands_separator,
+
+    format_money(sign: String, whole: u32, cents: String),
+    whole_balance(sign: String, whole: u32, cents: String),
 }
 
 fn main() {

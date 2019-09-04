@@ -21,11 +21,14 @@
     "budget_amount_header": "Budget mensuel",
     "budget_balance_header": "Solde",
 
+    "decimal_separator": ",",
+    "thousands_separator": " ",
+
     "spending_name_header": "Nom",
     "spending_budget_category_header": "Categorie",
     "spending_amount_header": "Montant",
     "spending_day_header": "Date",
 
-    "format_money": "{whole},{cents} €",
-    "whole_balance": "Votre solde mensuel est de: {whole},{cents} €"
+    "format_money": "{sign}{whole},{cents} €",
+    "whole_balance": "Votre solde mensuel est de: {sign}{whole},{cents} €"
 }

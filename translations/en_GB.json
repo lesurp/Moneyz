@@ -21,11 +21,14 @@
     "budget_amount_header": "Monthly budget",
     "budget_balance_header": "Balance",
 
+    "decimal_separator": ".",
+    "thousands_separator": "'",
+
     "spending_name_header": "Name",
     "spending_budget_category_header": "Budget category",
     "spending_amount_header": "Amount",
     "spending_day_header": "Day",
 
-    "format_money": "£{whole}.{cents}",
-    "whole_balance": "Your monthly balance is: £{whole}.{cents}"
+    "format_money": "{sign}£{whole}.{cents}",
+    "whole_balance": "Your monthly balance is: {sign}£{whole}.{cents}"
 }
