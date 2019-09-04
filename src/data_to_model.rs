@@ -115,7 +115,7 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
     for spending in &monthly_budget.spendings.0 {
         *balance_per_budget
             .entry(spending.budget_category_id)
-            .or_insert(0) += spending.amount;
+            .or_insert(0) += spending.amount.to_i32();
     }
 
     for (budget_category_id, budget_category) in &budget_categories.0 {
@@ -130,8 +130,13 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
 
         let balance =
             budget_category_amount.0 + balance_per_budget.get(&budget_category_id).unwrap_or(&0);
+        let balance_amount = MoneyAmount::from_i32(balance);
         let formatted_balance = translation_provider
-            .format_money(amount.sign(), amount.whole(), amount.cents_padded())
+            .format_money(
+                balance_amount.sign(),
+                balance_amount.whole(),
+                balance_amount.cents_padded(),
+            )
             .expect("Could not format the input in the budget_category_amount fn!");
         let balance_cell_color = amount_to_color(balance);
 
@@ -228,10 +233,13 @@ pub fn get_spendings_model(
                 ),
             };
 
-        let amount_cell_background_color = amount_to_color(spending.amount);
-        let amount = MoneyAmount::from_i32(spending.amount);
+        let amount_cell_background_color = amount_to_color(spending.amount.to_i32());
         let formatted_amount = translation_provider
-            .format_money(amount.sign(), amount.whole(), amount.cents_padded())
+            .format_money(
+                spending.amount.sign(),
+                spending.amount.whole(),
+                spending.amount.cents_padded(),
+            )
             .expect("Could not format the input in the budget_category_amount fn!");
 
         spendings_list.insert_with_values(
@@ -310,7 +318,7 @@ pub fn add_default_spending(model: &gtk::ListStore, today: Day) {
             // TODO: see comment on the Spendings declaration on why we do that
             // note: using an option would be better...
             &"",
-            &"0",
+            &"",
             &today.0,
             &BACKGROUND_COLOR_IS_DEFAULT,
             &BACKGROUND_COLOR_IS_DEFAULT,

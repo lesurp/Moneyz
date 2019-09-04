@@ -344,13 +344,15 @@ impl Widget for MainWindow {
 
     fn on_spending_amount_cell_changed(&mut self, path: gtk::TreePath, value: String) {
         debug!("Amount cell modified; new value: {}", value);
-        let amount = if let Ok(amount) = value.parse::<i32>() {
+        let amount = if let Some(amount) =
+            MoneyAmount::from_string(&value, &self.model.translation_provider.decimal_separator())
+        {
             amount
         } else {
             debug!("'{}' could NOT be parsed into an amount", value);
             return;
         };
-        debug!("Parsed amount: {}", amount);
+        debug!("Parsed amount: {}", amount.to_i32());
 
         let spending_category_row = path.get_indices()[0] as usize;
         match &mut self
@@ -423,7 +425,7 @@ impl Widget for MainWindow {
                 let budget_category_name =
                     BudgetCategory("default budget_category_name".to_owned());
                 let day = self.model.today;
-                let amount = 0;
+                let amount = Default::default();
 
                 self.model.monthly_budget.spendings.0.push(Spending {
                     name: value,
@@ -463,7 +465,7 @@ impl Widget for MainWindow {
                 let budget_category_name =
                     BudgetCategory("default budget_category_name".to_owned());
                 let name = "default_spending_name".to_owned();
-                let amount = 0;
+                let amount = Default::default();
 
                 self.model.monthly_budget.spendings.0.push(Spending {
                     name,
@@ -509,7 +511,7 @@ impl Widget for MainWindow {
                 let budget_category_name =
                     BudgetCategory("default budget_category_name".to_owned());
                 let name = "default_spending_name".to_owned();
-                let amount = 0;
+                let amount = Default::default();
                 let day = self.model.today;
 
                 self.model.monthly_budget.spendings.0.push(Spending {
@@ -712,7 +714,7 @@ impl Widget for MainWindow {
             .spendings
             .0
             .iter()
-            .fold(0, |total, spending| total + spending.amount);
+            .fold(0, |total, spending| total + spending.amount.to_i32());
         // TODO: gotta store the amount in cents!
         let money_amount = MoneyAmount::from_i32(total);
         self.monthly_budget_total_label.set_text(

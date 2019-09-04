@@ -81,7 +81,7 @@ pub struct Spending {
     // Then I'd still need a default value which would conflict with the Spending value...
     pub budget_category_id: BudgetCategoryId,
     pub budget_category_name: BudgetCategory,
-    pub amount: i32,
+    pub amount: MoneyAmount,
     // only a day, for the month and year should be known for each MonthlyBudget anyway
     pub day: Day,
 }
@@ -104,11 +104,13 @@ impl Default for MonthlyBudget {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub enum MoneyAmountType {
     Credit,
     Debit,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct MoneyAmount {
     amount_type: MoneyAmountType,
     whole: u32,
@@ -186,6 +188,17 @@ impl MoneyAmount {
         match self.amount_type {
             MoneyAmountType::Debit => "-".to_owned(),
             MoneyAmountType::Credit => "".to_owned(),
+        }
+    }
+}
+
+impl Default for MoneyAmount {
+    fn default() -> Self {
+        MoneyAmount {
+            // important as we want 0 to be display as "0.00", not "-0.00"
+            amount_type: MoneyAmountType::Credit,
+            whole: 0,
+            cents: 0,
         }
     }
 }
