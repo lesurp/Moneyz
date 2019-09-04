@@ -83,7 +83,7 @@ fn main() {
             }
     };
 
-    get_language_list = quote!{
+    get_language_list = quote! {
         pub fn get_language_list() -> Vec<(String, String)> {
             vec![
                 #get_language_list

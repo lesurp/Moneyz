@@ -1,1 +1,4 @@
-include!(concat!(env!("OUT_DIR"), "/translation_provider_generated.rs"));
+include!(concat!(
+    env!("OUT_DIR"),
+    "/translation_provider_generated.rs"
+));

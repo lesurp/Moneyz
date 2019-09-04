@@ -1,5 +1,5 @@
-use crate::data::{BudgetCategories, Month, MonthlyBudget, Year};
 use crate::config::Config;
+use crate::data::{BudgetCategories, Month, MonthlyBudget, Year};
 use serde_json;
 use std::error::Error;
 use std::fs::File;
@@ -58,10 +58,7 @@ impl FileLoader {
         }
     }
 
-    pub fn save_config(
-        &self,
-        config: &Config,
-    ) -> Result<(), Box<dyn Error>> {
+    pub fn save_config(&self, config: &Config) -> Result<(), Box<dyn Error>> {
         let mut config_path = self.base_dir.clone();
         config_path.push(CONFIG_FILE);
         FileLoader::save(&config_path, config)

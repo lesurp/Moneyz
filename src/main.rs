@@ -1,9 +1,9 @@
+mod config;
 mod data;
 mod data_to_model;
 mod file_loader;
 mod main_window;
 mod translation_provider;
-mod config;
 
 use relm::Widget;
 
