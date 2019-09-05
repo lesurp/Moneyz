@@ -355,10 +355,13 @@ impl Widget for MainWindow {
             // and new one
             None => {
                 // TODO: use translation_provider
-                let name = "Default spending name".to_owned();
+                let name = self.model.translation_provider.spending_name_placeholder();
                 let budget_category_id = BudgetCategoryId(u32::max_value());
-                let budget_category_name =
-                    BudgetCategory("default budget_category_name".to_owned());
+                let budget_category_name = BudgetCategory(
+                    self.model
+                        .translation_provider
+                        .spending_category_name_placeholder(),
+                );
                 let day = self.model.today;
 
                 self.model.monthly_budget.spendings.0.push(Spending {
@@ -413,8 +416,11 @@ impl Widget for MainWindow {
             None => {
                 // TODO: use translation_provider
                 let budget_category_id = BudgetCategoryId(u32::max_value());
-                let budget_category_name =
-                    BudgetCategory("default budget_category_name".to_owned());
+                let budget_category_name = BudgetCategory(
+                    self.model
+                        .translation_provider
+                        .spending_category_name_placeholder(),
+                );
                 let day = self.model.today;
                 let amount = Default::default();
 
@@ -460,9 +466,12 @@ impl Widget for MainWindow {
             None => {
                 // TODO: use translation_provider
                 let budget_category_id = BudgetCategoryId(u32::max_value());
-                let budget_category_name =
-                    BudgetCategory("default budget_category_name".to_owned());
-                let name = "default_spending_name".to_owned();
+                let budget_category_name = BudgetCategory(
+                    self.model
+                        .translation_provider
+                        .spending_category_name_placeholder(),
+                );
+                let name = self.model.translation_provider.spending_name_placeholder();
                 let amount = Default::default();
 
                 self.model.monthly_budget.spendings.0.push(Spending {
@@ -511,9 +520,12 @@ impl Widget for MainWindow {
             // and new one
             None => {
                 // TODO: use translation_provider
-                let budget_category_name =
-                    BudgetCategory("default budget_category_name".to_owned());
-                let name = "default_spending_name".to_owned();
+                let budget_category_name = BudgetCategory(
+                    self.model
+                        .translation_provider
+                        .spending_category_name_placeholder(),
+                );
+                let name = self.model.translation_provider.spending_name_placeholder();
                 let amount = Default::default();
                 let day = self.model.today;
 
