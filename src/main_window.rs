@@ -398,6 +398,14 @@ impl Widget for MainWindow {
         self.update_budget_categories_gtk_model_from_moneyz_model();
         self.update_monthly_total_label_from_moneyz_model();
         self.update_monthly_budget_gtk_model_from_moneyz_model();
+        self.model
+            .file_loader
+            .save_monthly_budget(
+                self.model.selected_month,
+                self.model.selected_year,
+                &self.model.monthly_budget,
+            )
+            .unwrap();
     }
 
     fn on_spending_name_cell_changed(&mut self, path: gtk::TreePath, value: String) {
@@ -435,6 +443,14 @@ impl Widget for MainWindow {
             }
         }
         self.update_monthly_budget_gtk_model_from_moneyz_model();
+        self.model
+            .file_loader
+            .save_monthly_budget(
+                self.model.selected_month,
+                self.model.selected_year,
+                &self.model.monthly_budget,
+            )
+            .unwrap();
     }
 
     fn on_spending_day_cell_changed(&mut self, path: gtk::TreePath, value: String) {
@@ -474,6 +490,14 @@ impl Widget for MainWindow {
             }
         }
         self.update_monthly_budget_gtk_model_from_moneyz_model();
+        self.model
+            .file_loader
+            .save_monthly_budget(
+                self.model.selected_month,
+                self.model.selected_year,
+                &self.model.monthly_budget,
+            )
+            .unwrap();
     }
 
     fn on_spending_category_cell_changed(&mut self, path: gtk::TreePath, value: String) {
