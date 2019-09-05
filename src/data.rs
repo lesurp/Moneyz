@@ -169,6 +169,7 @@ impl MoneyAmount {
     }
 
     pub fn to_i32(&self) -> i32 {
+        // TODO: program crashes if whole * 100 overflows!
         (self.whole * 100 + self.cents) as i32
             * match self.amount_type {
                 MoneyAmountType::Debit => -1,
