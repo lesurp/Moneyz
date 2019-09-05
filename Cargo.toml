@@ -11,7 +11,7 @@ edition = "2018"
 gtk = "^0.7.0"
 relm = "^0.17.0"
 relm-derive = "^0.17.0"
-gtk-test = "0.4.0"
+gdk = "0.11.0"
 # qol
 num-traits = "0.2"
 num-derive = "0.2.5"
