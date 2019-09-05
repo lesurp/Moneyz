@@ -241,22 +241,7 @@ impl Widget for MainWindow {
                     .budgets
                     .insert(*id, BudgetAmount(amount.to_i32()));
             }
-            // we changed the amount for the default budget entry
-            // therefore we have nothing to update after creating it
-            None => {
-                let new_id = self
-                    .model
-                    .budget_categories
-                    .0
-                    .iter_mut()
-                    .last()
-                    .map_or(0, |(id, _)| id.0)
-                    + 1;
-                self.model.budget_categories.0.insert(
-                    BudgetCategoryId(new_id),
-                    BudgetCategory("default new category_name".to_owned()),
-                );
-            }
+            None => (),
         }
 
         self.model
