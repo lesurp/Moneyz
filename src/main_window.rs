@@ -726,7 +726,9 @@ impl Widget for MainWindow {
                 .translation_provider
                 .whole_balance(
                     money_amount.sign(),
-                    money_amount.whole(),
+                    money_amount.whole_with_separator(
+                        &self.model.translation_provider.thousands_separator(),
+                    ),
                     money_amount.cents_padded(),
                 )
                 .unwrap(),

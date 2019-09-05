@@ -125,7 +125,7 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
             .unwrap_or(&BudgetAmount(0));
         let amount = MoneyAmount::from_i32(budget_category_amount.0);
         let formatted_amount = translation_provider
-            .format_money(amount.sign(), amount.whole(), amount.cents_padded())
+            .format_money(amount.sign(), amount.whole_with_separator(&translation_provider.thousands_separator()), amount.cents_padded())
             .expect("Could not format the input in the budget_category_amount fn!");
 
         let balance =
@@ -134,7 +134,7 @@ pub fn get_model_from_budget_categories_and_monthly_budget(
         let formatted_balance = translation_provider
             .format_money(
                 balance_amount.sign(),
-                balance_amount.whole(),
+                balance_amount.whole_with_separator(&translation_provider.thousands_separator()),
                 balance_amount.cents_padded(),
             )
             .expect("Could not format the input in the budget_category_amount fn!");
@@ -237,7 +237,7 @@ pub fn get_spendings_model(
         let formatted_amount = translation_provider
             .format_money(
                 spending.amount.sign(),
-                spending.amount.whole(),
+                spending.amount.whole_with_separator(&translation_provider.thousands_separator()),
                 spending.amount.cents_padded(),
             )
             .expect("Could not format the input in the budget_category_amount fn!");

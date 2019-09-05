@@ -177,8 +177,19 @@ impl MoneyAmount {
             }
     }
 
-    pub fn whole(&self) -> u32 {
-        self.whole
+    pub fn whole_with_separator(&self, sep: &str) -> String {
+        let string = self.whole.to_string();
+        let mut with_sep = String::with_capacity(string.len() + string.len() / 3);
+        let mut count = 0;
+        for c in string.chars().rev() {
+            with_sep.push(c);
+            count += 1;
+            if count >= 3 {
+                with_sep.push_str(sep);
+                count = 0;
+            }
+        }
+        with_sep.chars().rev().collect()
     }
 
     pub fn cents_padded(&self) -> String {
