@@ -11,6 +11,7 @@ use crate::file_loader::FileLoader;
 use crate::translation_provider::TranslationProvider;
 use crate::{MoneyzModel, MoneyzMsg};
 use chrono::Datelike;
+use gdk;
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::*;
 use log::debug;
@@ -99,6 +100,25 @@ impl Widget for MainWindow {
         col.add_attribute(&cell, "text", Balance.into());
         col.add_attribute(&cell, "background", BalanceBackgroundColor.into());
         self.budget_categories_tree_view.append_column(&col);
+
+        // handle keypressed
+        let relm = self.model.relm.clone();
+        self.budget_categories_tree_view
+            .connect_key_press_event(move |_, event| {
+                use gdk::enums::key;
+                match event.get_keyval() {
+                    key::Delete => {
+                        debug!("Delete key has been while focus the budget_categories_tree_view.");
+                        relm.stream()
+                            .emit(MoneyzMsg::BudgetCategoriesDeleteKeyPressed);
+                        Inhibit(true)
+                    }
+                    _ => Inhibit(false),
+                }
+            });
+        self.budget_categories_tree_view
+            .get_selection()
+            .set_mode(gtk::SelectionMode::Multiple);
     }
 
     fn initialize_spendings_tree_view_headers(&mut self) {
@@ -183,6 +203,9 @@ impl Widget for MainWindow {
         });
         self.spendings_tree_view.append_column(&col);
         self.model.spending_day_combox_box = Some(cell);
+        self.spendings_tree_view
+            .get_selection()
+            .set_mode(gtk::SelectionMode::Multiple);
     }
 
     fn initialize_month_year_combo_boxes(&self) {
@@ -201,6 +224,20 @@ impl Widget for MainWindow {
         self.year_combo_box.add_attribute(&cell, "text", 0);
         self.year_combo_box
             .set_active(Some(self.model.selected_year.0 - FIRST_YEAR));
+
+        let relm = self.model.relm.clone();
+        self.spendings_tree_view
+            .connect_key_press_event(move |_, event| {
+                use gdk::enums::key;
+                match event.get_keyval() {
+                    key::Delete => {
+                        debug!("Delete key has been while focus the spendings_tree_view.");
+                        relm.stream().emit(MoneyzMsg::SpendingsDeleteKeyPressed);
+                        Inhibit(true)
+                    }
+                    _ => Inhibit(false),
+                }
+            });
     }
 
     fn initialize_language_combo_box(&self) {
@@ -540,6 +577,98 @@ impl Widget for MainWindow {
         }
         self.update_monthly_budget_gtk_model_from_moneyz_model();
         self.update_budget_categories_gtk_model_from_moneyz_model();
+        self.model
+            .file_loader
+            .save_monthly_budget(
+                self.model.selected_month,
+                self.model.selected_year,
+                &self.model.monthly_budget,
+            )
+            .unwrap();
+    }
+
+    fn on_budget_categories_delete_key_pressed(&mut self) {
+        let selection = self.budget_categories_tree_view.get_selection();
+        let (selected_paths, _) = selection.get_selected_rows();
+        let selected_budget_category_ids = selected_paths
+            .iter()
+            .filter_map(|path| {
+                let budget_category_row = path.get_indices()[0] as usize;
+                match self
+                    .model
+                    .budget_categories
+                    .0
+                    .iter()
+                    .nth(budget_category_row)
+                {
+                    Some((id, _)) => Some(*id),
+                    None => None,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        for selected_budget_category_id in selected_budget_category_ids {
+            self.model
+                .budget_categories
+                .0
+                .remove(&selected_budget_category_id);
+        }
+
+        self.update_budget_categories_gtk_model_from_moneyz_model();
+        self.update_monthly_budget_gtk_model_from_moneyz_model();
+        let category_model: gtk::ListStore = (&self.model.budget_categories).into();
+        let tree_model = category_model.upcast::<gtk::TreeModel>();
+        self.model
+            .spending_category_combox_box
+            .as_ref()
+            .unwrap()
+            .set_property_model(Some(&tree_model));
+
+        self.model
+            .file_loader
+            .save_budget_categories(&self.model.budget_categories)
+            .unwrap();
+    }
+
+    fn on_spendings_delete_key_pressed(&mut self) {
+        let selection = self.spendings_tree_view.get_selection();
+        let (selected_paths, _) = selection.get_selected_rows();
+        let mut selected_spending_ids = selected_paths
+            .iter()
+            .filter_map(|path| {
+                let spending_category_row = path.get_indices()[0] as usize;
+                match self
+                    .model
+                    .monthly_budget
+                    .spendings
+                    .0
+                    .get(spending_category_row)
+                {
+                    Some(_) => Some(spending_category_row),
+                    None => None,
+                }
+            })
+            .collect::<Vec<_>>();
+        selected_spending_ids.sort_by(|a, b| b.cmp(a));
+
+        for selected_spending_id in selected_spending_ids {
+            self.model
+                .monthly_budget
+                .spendings
+                .0
+                .remove(selected_spending_id);
+        }
+
+        self.update_budget_categories_gtk_model_from_moneyz_model();
+        self.update_monthly_budget_gtk_model_from_moneyz_model();
+        self.model
+            .file_loader
+            .save_monthly_budget(
+                self.model.selected_month,
+                self.model.selected_year,
+                &self.model.monthly_budget,
+            )
+            .unwrap();
     }
 
     fn on_change_selected_date(&mut self) {
@@ -632,6 +761,8 @@ impl Widget for MainWindow {
             SpendingCategoryCellChanged(path, value) => {
                 self.on_spending_category_cell_changed(path, value)
             }
+            BudgetCategoriesDeleteKeyPressed => self.on_budget_categories_delete_key_pressed(),
+            SpendingsDeleteKeyPressed => self.on_spendings_delete_key_pressed(),
             ChangeSelectedDate => self.on_change_selected_date(),
             LanguageChanged => self.on_language_changed(),
             Quit => gtk::main_quit(),

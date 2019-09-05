@@ -29,6 +29,8 @@ pub struct MoneyzModel {
 pub enum MoneyzMsg {
     ChangeSelectedDate,
     LanguageChanged,
+    BudgetCategoriesDeleteKeyPressed,
+    SpendingsDeleteKeyPressed,
     SpendingCategoryCellChanged(gtk::TreePath, String),
     SpendingNameCellChanged(gtk::TreePath, String),
     SpendingAmountCellChanged(gtk::TreePath, String),
