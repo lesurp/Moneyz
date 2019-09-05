@@ -28,6 +28,8 @@
     "spending_budget_category_header": "Categorie",
     "spending_amount_header": "Montant",
     "spending_day_header": "Date",
+    "spending_name_placeholder": "Nouvelle transaction",
+    "spending_category_name_placeholder": "Pas de catégorie",
 
     "format_money": "{sign}{whole},{cents} €",
     "whole_balance": "Votre solde mensuel est de: {sign}{whole},{cents} €"

@@ -28,6 +28,8 @@
     "spending_budget_category_header": "Budget category",
     "spending_amount_header": "Amount",
     "spending_day_header": "Day",
+    "spending_name_placeholder": "New transaction",
+    "spending_category_name_placeholder": "No category",
 
     "format_money": "{sign}£{whole}.{cents}",
     "whole_balance": "Your monthly balance is: {sign}£{whole}.{cents}"

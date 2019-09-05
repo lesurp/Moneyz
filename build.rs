@@ -31,12 +31,14 @@ generate_translation! {
     spending_budget_category_header,
     spending_amount_header,
     spending_day_header,
+    spending_name_placeholder,
+    spending_category_name_placeholder,
 
     decimal_separator,
     thousands_separator,
 
-    format_money(sign: String, whole: u32, cents: String),
-    whole_balance(sign: String, whole: u32, cents: String),
+    format_money(sign: String, whole: String, cents: String),
+    whole_balance(sign: String, whole: String, cents: String),
 }
 
 fn main() {
